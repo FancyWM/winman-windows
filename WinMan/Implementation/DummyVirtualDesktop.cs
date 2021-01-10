@@ -12,8 +12,10 @@ namespace WinMan.Implementation
 
         public IWorkspace Workspace { get; }
 
+#pragma warning disable
         public event VirtualDesktopChangedEventHandler Removed;
-        
+#pragma warning restore
+
         public DummyVirtualDesktop(IWorkspace workspace)
         {
             Workspace = workspace;
@@ -25,7 +27,7 @@ namespace WinMan.Implementation
 
         public bool HasWindow(IWindow window)
         {
-            return window.IsValid;
+            return window.IsAlive;
         }
 
         public void SwitchTo()

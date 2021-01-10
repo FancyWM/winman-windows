@@ -7,16 +7,18 @@ namespace WinMan.Implementation
     {
         public IWorkspace Workspace { get; }
 
-        public bool IsVirtualDesktopsSupported => false;
+        public bool CanManageVirtualDesktops => false;
 
         public IReadOnlyList<IVirtualDesktop> Desktops { get; }
 
         public IVirtualDesktop CurrentDesktop => Desktops[0];
 
 
+#pragma warning disable
         public event VirtualDesktopChangedEventHandler CurrentDesktopChanged;
         public event VirtualDesktopChangedEventHandler DesktopAdded;
         public event VirtualDesktopChangedEventHandler DesktopRemoved;
+#pragma warning restore
 
         public DummyVirtualDesktopManager(IWorkspace workspace)
         {
