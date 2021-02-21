@@ -16,8 +16,8 @@ namespace WinMan.Implementation
 
 #pragma warning disable
         public event VirtualDesktopChangedEventHandler CurrentDesktopChanged;
-        public event VirtualDesktopChangedEventHandler DesktopAdded;
-        public event VirtualDesktopChangedEventHandler DesktopRemoved;
+        public event VirtualDesktopAddedEventHandler DesktopAdded;
+        public event VirtualDesktopRemovedEventHandler DesktopRemoved;
 #pragma warning restore
 
         public DummyVirtualDesktopManager(IWorkspace workspace)
