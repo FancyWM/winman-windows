@@ -31,7 +31,7 @@ namespace WinMan.Implementation
 
         public bool IsWindowPinned(IWindow window)
         {
-            return true;
+            return false;
         }
 
         public void PinWindow(IWindow window)
