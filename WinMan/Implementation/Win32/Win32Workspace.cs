@@ -21,8 +21,10 @@ namespace WinMan.Implementation.Win32
         private static readonly IntPtr IDT_TIMER_WATCH = new IntPtr(1);
         private const uint TIMER_WATCH_INTERVAL = 50;
 
+        private IntPtr m_msgWnd;
         private Thread m_eventLoopThread;
         private Deleter m_winEventHook;
+        private IntPtr m_hTimer;
         private bool m_isShuttingDown = false;
 
         private HashSet<Win32Window> m_visibleWindows = new HashSet<Win32Window>();
@@ -93,11 +95,12 @@ namespace WinMan.Implementation.Win32
 
         public Win32Workspace()
         {
-            m_displayManager = new Win32DisplayManager(this);
         }
 
         public void Open()
         {
+            m_displayManager = new Win32DisplayManager(this);
+
             m_eventLoopThread = new Thread(EventLoop);
             m_eventLoopThread.Name = "Win32WorkspaceEventLoop";
 
@@ -173,6 +176,19 @@ namespace WinMan.Implementation.Win32
             return new Win32LiveThumbnail(destWindow, srcWindow);
         }
 
+        public void RefreshConfiguration()
+        {
+            CheckVirtualDesktops();
+            CheckVisibilityChanges();
+            OnSettingChange();
+            OnDisplayChange();
+
+            foreach (var window in GetVisibleWindowList())
+            {
+                window.CheckChanges();
+            }
+        }
+
         public IWindow UnsafeCreateFromHandle(IntPtr windowHandle)
         {
             return new Win32Window(this, windowHandle);
@@ -180,6 +196,7 @@ namespace WinMan.Implementation.Win32
 
         public void Dispose()
         {
+            KillTimer(IntPtr.Zero, m_hTimer);
             m_isShuttingDown = true;
             m_winEventHook?.Dispose();
             m_eventLoopThread?.Join();
@@ -199,8 +216,20 @@ namespace WinMan.Implementation.Win32
             return null;
         }
 
+        [Obsolete]
         private void EventLoop()
         {
+            m_msgWnd = CreateWindowEx(
+                ExtendedWindowStyles.WS_EX_NOACTIVATE,
+                "STATIC",
+                "WinManMessageReceiver",
+                WindowStyles.WS_DISABLED,
+                0, 0, 0, 0,
+                IntPtr.Zero,
+                IntPtr.Zero,
+                GetModuleHandle(null),
+                IntPtr.Zero);
+
             m_winEventHook = WinEventHookHelper.CreateGlobalOutOfContextHook(new SortedSet<uint>
             {
                 //EVENT_MIN,
@@ -219,25 +248,33 @@ namespace WinMan.Implementation.Win32
                 EVENT_OBJECT_LOCATIONCHANGE,
             }, OnWinEvent);
 
-            SetTimer(IntPtr.Zero, IDT_TIMER_WATCH, TIMER_WATCH_INTERVAL, OnTimerWatch);
-
-            while (!m_isShuttingDown && GetMessage(out MSG msg, IntPtr.Zero, 0, 0) > 0)
+            m_hTimer = SetTimer(m_msgWnd, IDT_TIMER_WATCH, TIMER_WATCH_INTERVAL, null);
+            if (m_hTimer == IntPtr.Zero)
             {
-                TranslateMessage(ref msg);
-                DispatchMessage(ref msg);
+                throw new Win32Exception();
+            }
+
+            while (!m_isShuttingDown && GetMessage(out MSG msg, m_msgWnd, 0, 0) > 0)
+            {
+                WndProc(m_msgWnd, msg.message, msg.wParam, msg.lParam);
             }
         }
 
-        private void OnTimerWatch(IntPtr hWnd, uint uMsg, IntPtr nIDEvent, uint dwTime)
+        private void WndProc(IntPtr hwnd, uint msg, UIntPtr wParam, IntPtr lParam)
         {
             try
             {
-                CheckVirtualDesktops();
-                CheckVisibilityChanges();
-
-                foreach (var window in GetVisibleWindowList())
+                switch (msg)
                 {
-                    window.CheckChanges();
+                    case WM_TIMER:
+                        OnTimerWatch();
+                        break;
+                    case WM_DISPLAYCHANGE:
+                        OnDisplayChange();
+                        break;
+                    case WM_SETTINGCHANGE:
+                        OnSettingChange();
+                        break;
                 }
             }
             catch (Exception e)
@@ -254,10 +291,23 @@ namespace WinMan.Implementation.Win32
             }
         }
 
+        private void OnSettingChange()
+        {
+            m_displayManager.OnSettingChange();
+        }
+
+        private void OnDisplayChange()
+        {
+            m_displayManager.OnDisplayChange();
+        }
+
+        private void OnTimerWatch()
+        {
+            RefreshConfiguration();
+        }
+
         private void OnWinEvent(uint eventType, IntPtr hwnd, int idObject, int idChild, uint idEventThread, uint dwmsEventTime)
         {
-            // Console.WriteLine($"Event {eventType.ToString("x")}, HWND={hwnd}, idObject={idObject.ToString("x")}, idChild={idChild.ToString("x")}, idEventThread={idEventThread.ToString("x")}");
-
             if (idObject != OBJID_WINDOW || idChild != 0)
             {
                 return;
@@ -284,10 +334,16 @@ namespace WinMan.Implementation.Win32
                     //    return;
 
                     case EVENT_SYSTEM_MOVESIZESTART:
-                        m_windowSet[hwnd].OnMoveSizeStart();
+                        if (m_windowSet.TryGetValue(hwnd, out window))
+                        {
+                            m_windowSet[hwnd].OnMoveSizeStart();
+                        }
                         return;
                     case EVENT_SYSTEM_MOVESIZEEND:
-                        m_windowSet[hwnd].OnMoveSizeEnd();
+                        if (m_windowSet.TryGetValue(hwnd, out window))
+                        {
+                            m_windowSet[hwnd].OnMoveSizeEnd();
+                        }
                         return;
 
                     case EVENT_SYSTEM_FOREGROUND:
@@ -315,7 +371,7 @@ namespace WinMan.Implementation.Win32
             }
             catch (Exception e)
             {
-                if (e.IsInvalidHandleException())
+                if (e.IsInvalidWindowHandleException())
                 {
                     CatchWndProcException(() => CheckVisibilityChanges());
                     return;

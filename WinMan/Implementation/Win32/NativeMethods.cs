@@ -22,13 +22,13 @@ namespace WinMan.Implementation.Win32
         [StructLayout(LayoutKind.Sequential)]
         internal struct MSG
         {
-            IntPtr hwnd;
-            uint message;
-            UIntPtr wParam;
-            IntPtr lParam;
-            int time;
-            POINT pt;
-            int lPrivate;
+            public IntPtr hwnd;
+            public uint message;
+            public UIntPtr wParam;
+            public IntPtr lParam;
+            public int time;
+            public POINT pt;
+            public int lPrivate;
         }
 
 
@@ -50,7 +50,7 @@ namespace WinMan.Implementation.Win32
         internal static extern bool GetCursorPos(out POINT lpPoint);
 
         /// <summary>
-        /// 
+        ///
         /// </summary>
         /// <param name="hwnd"></param
         /// <param name="lpString"></param>
@@ -60,7 +60,7 @@ namespace WinMan.Implementation.Win32
         internal static extern int GetWindowText(IntPtr hwnd, StringBuilder lpString, int maxCount);
 
         /// <summary>
-        /// 
+        ///
         /// </summary>
         /// <param name="hwnd"></param>
         /// <returns>A value of 0 might indicate failure, check GetLastError</returns>
@@ -305,7 +305,7 @@ namespace WinMan.Implementation.Win32
 
             /// <summary>
             /// The window is a control that can receive the keyboard focus when the user presses the TAB key.
-            /// Pressing the TAB key changes the keyboard focus to the next control with the WS_TABSTOP style.  
+            /// Pressing the TAB key changes the keyboard focus to the next control with the WS_TABSTOP style.
             /// You can turn this style on and off to change dialog box navigation. To change this style after a window has been created, use the SetWindowLong function.
             /// For user-created windows and modeless dialogs to work with tab stops, alter the message loop to call the IsDialogMessage function.
             /// </summary>
@@ -631,6 +631,9 @@ namespace WinMan.Implementation.Win32
         [DllImport("user32.dll", SetLastError = true)]
         internal static extern IntPtr GetDesktopWindow();
 
+        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
+        internal delegate IntPtr WndProc(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam);
+
         [DllImport("user32.dll", SetLastError = true)]
         internal static extern IntPtr CreateWindowEx(
            ExtendedWindowStyles dwExStyle,
@@ -662,6 +665,9 @@ namespace WinMan.Implementation.Win32
         internal const uint WM_GETMINMAXINFO = 0x0024;
         internal const uint WM_GETTEXT = 0x000D;
         internal const uint WM_GETTEXTLENGTH = 0x000E;
+        internal const uint WM_DISPLAYCHANGE = 0x007E;
+        internal const uint WM_TIMER = 0x0113;
+        internal const uint WM_SETTINGCHANGE = 0x001A;
 
         [DllImport("user32.dll", SetLastError = true, CharSet = CharSet.Auto)]
         internal static extern IntPtr SendMessageTimeout(
@@ -692,12 +698,15 @@ namespace WinMan.Implementation.Win32
             SendMessageTimeoutFlags flags,
             uint timeout,
             out IntPtr result);
-        
+
         [UnmanagedFunctionPointer(CallingConvention.Winapi)]
         internal delegate void TimerProc(IntPtr hWnd, uint uMsg, IntPtr nIDEvent, uint dwTime);
 
         [DllImport("user32.dll", SetLastError = true)]
         internal static extern IntPtr SetTimer(IntPtr hWnd, IntPtr nIDEvent, uint uElapse, TimerProc lpTimerFunc);
+
+        [DllImport("user32.dll", SetLastError = true)]
+        internal static extern bool KillTimer(IntPtr hWnd, IntPtr nIDEvent);
 
         [DllImport("user32.dll", SetLastError = true)]
         internal static extern IntPtr GetAncestor(IntPtr hWnd, GA gaFlags);
@@ -800,5 +809,28 @@ namespace WinMan.Implementation.Win32
 
         [DllImport("user32.dll", SetLastError = true)]
         internal static extern bool GetMonitorInfo(IntPtr hMonitor, ref MONITORINFO lpmi);
+
+        internal static class NT_6_3
+        {
+            internal const int MDT_EFFECTIVE_DPI = 0;
+
+            [DllImport("shcore.dll")]
+            internal static extern uint GetDpiForMonitor(IntPtr hmonitor, int dpiType, out uint dpiX, out uint dpiY);
+        }
+
+        [DllImport("user32.dll", SetLastError=true)]
+        internal static extern IntPtr CreateWindowEx(
+           uint dwExStyle,
+           string lpClassName,
+           string lpWindowName,
+           WindowStyles dwStyle,
+           int x,
+           int y,
+           int nWidth,
+           int nHeight,
+           IntPtr hWndParent,
+           IntPtr hMenu,
+           IntPtr hInstance,
+           IntPtr lpParam);
     }
 }

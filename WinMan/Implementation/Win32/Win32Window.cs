@@ -322,7 +322,7 @@ namespace WinMan.Implementation.Win32
 
                 UpdateTopmostAndNotify(topmost);
             }
-            catch (Win32Exception e) when (e.IsInvalidHandleException())
+            catch (Win32Exception e) when (e.IsInvalidWindowHandleException())
             {
                 m_isDead = true;
                 CheckAlive();
@@ -340,7 +340,7 @@ namespace WinMan.Implementation.Win32
                     throw new Win32Exception();
                 }
             }
-            catch (Win32Exception e) when (e.IsInvalidHandleException())
+            catch (Win32Exception e) when (e.IsInvalidWindowHandleException())
             {
                 m_isDead = true;
                 CheckAlive();
@@ -839,6 +839,14 @@ namespace WinMan.Implementation.Win32
             try
             {
                 return func();
+            }
+            catch (InvalidWindowReferenceException)
+            {
+                return defaultValue;
+            }
+            catch (Win32Exception e) when (e.IsInvalidWindowHandleException())
+            {
+                return defaultValue;
             }
             catch (Exception)
             {

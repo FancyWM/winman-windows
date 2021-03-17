@@ -13,6 +13,8 @@ namespace WinMan.Implementation.Win32
         // TODO: Implements hotplug detection
         public event DisplayChangedHandler Added;
         public event DisplayChangedHandler Removed;
+        public event VirtualDisplayBoundsChangedHandler VirtualDisplayBoundsChanged;
+        public event PrimaryDisplayChangedHandler PrimaryDisplayChanged;
 
         public Rectangle VirtualDisplayBounds
         {
@@ -27,32 +29,46 @@ namespace WinMan.Implementation.Win32
             }
         }
 
-        public IDisplay PrimaryDisplay => GetDisplays().First(x => x.Bounds.TopLeft == new Point(0, 0));
+        public IDisplay PrimaryDisplay => Displays.First(x => x.Bounds.TopLeft == new Point(0, 0));
 
-        public IReadOnlyList<IDisplay> Displays => GetDisplays();
-
-        public IWorkspace Workspace { get; }
-
-        public Win32DisplayManager(IWorkspace workspace)
+        public IReadOnlyList<IDisplay> Displays
         {
-            Workspace = workspace;
+            get
+            {
+                lock (m_displays)
+                {
+                    return m_displays.ToList();
+                }
+            }
         }
 
-        private IReadOnlyList<Win32Display> GetDisplays()
+        public IWorkspace Workspace => m_workspace;
+
+        private readonly Win32Workspace m_workspace;
+
+        private readonly HashSet<Win32Display> m_displays;
+
+        public Win32DisplayManager(Win32Workspace workspace)
         {
-            List<Win32Display> displays = new List<Win32Display>();
-            if (!EnumDisplayMonitors(IntPtr.Zero, IntPtr.Zero, delegate(IntPtr hMonitor, IntPtr hdcMonitor, ref RECT lprcMonitor, IntPtr dwData)
+            m_workspace = workspace;
+            m_displays = GetMonitors().Select(x => new Win32Display(this, x)).ToHashSet();
+        }
+
+        private List<IntPtr> GetMonitors()
+        {
+            List<IntPtr> monitors = new List<IntPtr>();
+            if (!EnumDisplayMonitors(IntPtr.Zero, IntPtr.Zero, delegate (IntPtr hMonitor, IntPtr hdcMonitor, ref RECT lprcMonitor, IntPtr dwData)
             {
                 if (IsVisibleMonitor(hMonitor))
                 {
-                    displays.Add(new Win32Display(this, hMonitor));
+                    monitors.Add(hMonitor);
                 }
                 return true;
             }, IntPtr.Zero))
             {
                 throw new Win32Exception();
             }
-            return displays;
+            return monitors;
         }
 
         internal Rectangle GetWorkArea(IntPtr hMonitor)
@@ -67,6 +83,71 @@ namespace WinMan.Implementation.Win32
             return new Rectangle(rect.LEFT, rect.TOP, rect.RIGHT, rect.BOTTOM);
         }
 
+        internal void OnDisplayChange()
+        {
+            var addedDisplays = new List<Win32Display>();
+            var removedDisplays = new List<Win32Display>();
+
+            lock (m_displays)
+            {
+                var newMonitors = GetMonitors();
+                var handles = m_displays.Select(x => x.Handle);
+
+                var added = newMonitors.Except(handles).ToList();
+                var removed = handles.Except(newMonitors).ToList();
+
+                foreach (var hMonitor in removed)
+                {
+                    var disp = m_displays.First(x => x.Handle == hMonitor);
+                    removedDisplays.Add(disp);
+                }
+                m_displays.RemoveWhere(x => removed.Contains(x.Handle));
+
+                foreach (var hMonitor in added)
+                {
+                    var disp = new Win32Display(this, hMonitor);
+                    m_displays.Add(disp);
+                    addedDisplays.Add(disp);
+                }
+            }
+
+            try
+            {
+                foreach (var added in addedDisplays)
+                {
+                    Added?.Invoke(added);
+                }
+            }
+            finally
+            {
+                foreach (var removed in removedDisplays)
+                {
+                    try
+                    {
+                        removed.OnRemoved();
+                    }
+                    catch
+                    {
+                        Removed?.Invoke(removed);
+                    }
+                }
+            }
+        }
+
+        internal void OnSettingChange()
+        {
+            List<Win32Display> displays;
+            lock (m_displays)
+            {
+                displays = m_displays.ToList();
+            }
+
+            foreach (var d in displays)
+            {
+                d.OnSettingChange();
+            }
+        }
+
         private bool IsVisibleMonitor(IntPtr hMonitor)
         {
             return (GetMonitorInfo(hMonitor).dwFlags & DISPLAY_DEVICE_MIRRORING_DRIVER) == 0;
@@ -79,7 +160,14 @@ namespace WinMan.Implementation.Win32
 
             if (!NativeMethods.GetMonitorInfo(hMonitor, ref mi))
             {
-                throw new Win32Exception();
+                try
+                {
+                    throw new Win32Exception();
+                }
+                catch (Win32Exception e) when (e.IsInvalidMonitorHandleException())
+                {
+                    throw new InvalidDisplayReferenceException(hMonitor, e);
+                }
             }
 
             return mi;
