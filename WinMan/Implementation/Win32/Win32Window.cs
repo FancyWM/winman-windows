@@ -24,6 +24,7 @@ namespace WinMan.Implementation.Win32
         public event WindowPositionChangedEventHandler PositionChanged;
         public event WindowStateChangedEventHandler StateChanged;
         public event WindowUpdatedEventHandler TopmostChanged;
+        public event WindowTitleChangedEventHandler TitleChanged;
 
         public IntPtr Handle => m_hwnd;
 
@@ -37,7 +38,8 @@ namespace WinMan.Implementation.Win32
             }
         }
 
-        public string Title => UseDefaults(() => TitleInternal, "[DEAD]");
+        // Reference read is atomic
+        public string Title => m_title;
 
         public Rectangle Position
         {
@@ -58,14 +60,8 @@ namespace WinMan.Implementation.Win32
         {
             get
             {
-                WindowState GetValue()
-                {
-                    lock (m_syncRoot)
-                    {
-                        return m_state;
-                    }
-                }
-                return UseDefaults(GetValue, WindowState.Minimized);
+                // int read is atomic
+                return UseDefaults(() => m_state, WindowState.Minimized);
             }
         }
 
@@ -73,14 +69,8 @@ namespace WinMan.Implementation.Win32
         {
             get
             {
-                bool GetValue()
-                {
-                    lock (m_syncRoot)
-                    {
-                        return m_isTopmost;
-                    }
-                }
-                return UseDefaults(GetValue, false);
+                // bool read is atomic
+                return UseDefaults(() => m_isTopmost, false);
             }
         }
 
@@ -195,6 +185,10 @@ namespace WinMan.Implementation.Win32
         /// </summary>
         private volatile bool m_isDead;
         /// <summary>
+        /// The title of the window.
+        /// </summary>
+        private string m_title;
+        /// <summary>
         /// The current (last known) location of the window.
         /// </summary>
         private Rectangle m_position;
@@ -225,6 +219,7 @@ namespace WinMan.Implementation.Win32
             m_hwnd = hwnd;
             m_isDead = false;
             m_oldHwndPrev = PreviousWindow?.Handle ?? IntPtr.Zero;
+            m_title = TitleInternal;
         }
 
         public void Close()
@@ -442,6 +437,22 @@ namespace WinMan.Implementation.Win32
                 m_isFocused = false;
             }
             LostFocus?.Invoke(this);
+        }
+
+        internal void OnTitleChange()
+        {
+            var newTitle = UseDefaults(() => TitleInternal, "[Invalid Handle]");
+            string oldTitle;
+            lock (m_syncRoot)
+            {
+                oldTitle = m_title;
+                m_title = newTitle;
+            }
+
+            if (oldTitle != newTitle)
+            {
+                TitleChanged?.Invoke(this, oldTitle);
+            }
         }
 
         internal void OnPositionChanged()

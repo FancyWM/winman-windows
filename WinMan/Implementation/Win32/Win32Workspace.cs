@@ -230,10 +230,13 @@ namespace WinMan.Implementation.Win32
                 GetModuleHandle(null),
                 IntPtr.Zero);
 
+            // WndHooks.InstallWindowMessageHook(m_msgWnd, (int)(WM_USER + 100), WndHooks.HookID.WH_CALLWNDPROC, 0, 0);
+
             m_winEventHook = WinEventHookHelper.CreateGlobalOutOfContextHook(new SortedSet<uint>
             {
                 //EVENT_MIN,
                 //EVENT_MAX,
+                EVENT_OBJECT_CLOAKED,
 
                 EVENT_OBJECT_CREATE,
                 EVENT_OBJECT_DESTROY,
@@ -246,6 +249,10 @@ namespace WinMan.Implementation.Win32
 
                 EVENT_SYSTEM_FOREGROUND,
                 EVENT_OBJECT_LOCATIONCHANGE,
+
+                EVENT_SYSTEM_DESKTOPSWITCH,
+
+                EVENT_OBJECT_NAMECHANGE,
             }, OnWinEvent);
 
             m_hTimer = SetTimer(m_msgWnd, IDT_TIMER_WATCH, TIMER_WATCH_INTERVAL, null);
@@ -303,8 +310,10 @@ namespace WinMan.Implementation.Win32
 
         private void OnTimerWatch()
         {
-            RefreshConfiguration();
+            //RefreshConfiguration();
         }
+
+        private uint m_lastEventType = EVENT_MIN - 1;
 
         private void OnWinEvent(uint eventType, IntPtr hwnd, int idObject, int idChild, uint idEventThread, uint dwmsEventTime)
         {
@@ -312,6 +321,13 @@ namespace WinMan.Implementation.Win32
             {
                 return;
             }
+
+            bool isRepeatedEvent = false;
+            if (m_lastEventType == eventType)
+            {
+                isRepeatedEvent = true;
+            }
+            m_lastEventType = eventType;
 
             CatchWndProcException(() =>
             {
@@ -324,6 +340,18 @@ namespace WinMan.Implementation.Win32
                         return;
                     case EVENT_OBJECT_DESTROY:
                         OnWindowDestroyed(hwnd);
+                        return;
+
+                    case EVENT_SYSTEM_DESKTOPSWITCH:
+                        CheckVirtualDesktops();
+                        CheckVisibilityChanges();
+                        return;
+
+                    case EVENT_OBJECT_NAMECHANGE:
+                        if (m_windowSet.TryGetValue(hwnd, out window))
+                        {
+                            m_windowSet[hwnd].OnTitleChange();
+                        }
                         return;
 
                     //case EVENT_SYSTEM_MINIMIZEEND:

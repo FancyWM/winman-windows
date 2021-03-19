@@ -203,6 +203,10 @@ namespace WinMan.Implementation.Win32
 
         internal const uint EVENT_SYSTEM_ARRANGMENTPREVIEW = 0x8016;
 
+        internal const uint EVENT_OBJECT_CLOAKED = 0x8017;
+
+        internal const uint EVENT_OBJECT_UNCLOAKED = 0x8018;
+
         internal const uint EVENT_OBJECT_END = 0x80FF;
 
         internal const uint EVENT_AIA_START = 0xA000;
@@ -668,6 +672,7 @@ namespace WinMan.Implementation.Win32
         internal const uint WM_DISPLAYCHANGE = 0x007E;
         internal const uint WM_TIMER = 0x0113;
         internal const uint WM_SETTINGCHANGE = 0x001A;
+        internal const uint WM_USER = 0x0400;
 
         [DllImport("user32.dll", SetLastError = true, CharSet = CharSet.Auto)]
         internal static extern IntPtr SendMessageTimeout(
