@@ -19,13 +19,15 @@ namespace WinMan.Implementation.Win32
         public event UnhandledExceptionEventHandler UnhandledException;
 
         private static readonly IntPtr IDT_TIMER_WATCH = new IntPtr(1);
-        private const uint TIMER_WATCH_INTERVAL = 50;
+
+        private readonly object m_initSyncRoot = new object();
 
         private IntPtr m_msgWnd;
         private Thread m_eventLoopThread;
         private Deleter m_winEventHook;
         private IntPtr m_hTimer;
         private bool m_isShuttingDown = false;
+        private TimeSpan m_watchInterval = TimeSpan.FromMilliseconds(250);
 
         private HashSet<Win32Window> m_visibleWindows = new HashSet<Win32Window>();
         private List<Win32WindowHandle> m_windowList = new List<Win32WindowHandle>();
@@ -33,6 +35,8 @@ namespace WinMan.Implementation.Win32
         private IntPtr m_hwndFocused = IntPtr.Zero;
 
         private IVirtualDesktopManager m_virtualDesktops = null;
+
+        public bool IsOpen => m_eventLoopThread != null;
 
         public IWindow FocusedWindow
         {
@@ -93,41 +97,65 @@ namespace WinMan.Implementation.Win32
             }
         }
 
+        public TimeSpan WatchInterval
+        {
+            get => m_watchInterval;
+            set 
+            {
+                lock (m_initSyncRoot)
+                {
+                    if (IsOpen)
+                    {
+                        throw new InvalidOperationException("Set this value before calling Open()!");
+                    }
+                    m_watchInterval = value;
+                }
+            }
+        }
+
         public Win32Workspace()
         {
         }
 
         public void Open()
         {
-            m_displayManager = new Win32DisplayManager(this);
-
-            m_eventLoopThread = new Thread(EventLoop);
-            m_eventLoopThread.Name = "Win32WorkspaceEventLoop";
-
-            foreach (var window in GetWindowListImpl())
+            lock (m_initSyncRoot)
             {
-                m_windowSet.Add(window.Handle, window);
-                m_windowList.Add(window);
-
-                if (GetVisibility(window))
+                if (IsOpen)
                 {
-                    lock (m_visibleWindows)
-                    {
-                        m_visibleWindows.Add(window.WindowObject);
-                    }
+                    throw new InvalidOperationException("Workspace has already been Open()ed!");
+                }
 
-                    try
+                m_displayManager = new Win32DisplayManager(this);
+
+                m_eventLoopThread = new Thread(EventLoop);
+                m_eventLoopThread.Name = "Win32WorkspaceEventLoop";
+
+                foreach (var window in GetWindowListImpl())
+                {
+                    m_windowSet.Add(window.Handle, window);
+                    m_windowList.Add(window);
+
+                    if (GetVisibility(window))
                     {
-                        window.WindowObject.OnAdded();
-                    }
-                    finally
-                    {
-                        WindowManaging?.Invoke(this, new WindowChangedEventArgs(window.WindowObject));
+                        lock (m_visibleWindows)
+                        {
+                            m_visibleWindows.Add(window.WindowObject);
+                        }
+
+                        try
+                        {
+                            window.WindowObject.OnAdded();
+                        }
+                        finally
+                        {
+                            WindowManaging?.Invoke(this, new WindowChangedEventArgs(window.WindowObject));
+                        }
                     }
                 }
-            }
 
-            m_eventLoopThread.Start();
+                m_eventLoopThread.Start();
+            }
         }
 
         public IWindow FindWindow(IntPtr windowHandle)
@@ -171,11 +199,6 @@ namespace WinMan.Implementation.Win32
             });
         }
 
-        public ILiveThumbnail CreateLiveThumbnail(IWindow destWindow, IWindow srcWindow)
-        {
-            return new Win32LiveThumbnail(destWindow, srcWindow);
-        }
-
         public void RefreshConfiguration()
         {
             CheckVirtualDesktops();
@@ -216,7 +239,6 @@ namespace WinMan.Implementation.Win32
             return null;
         }
 
-        [Obsolete]
         private void EventLoop()
         {
             m_msgWnd = CreateWindowEx(
@@ -248,7 +270,7 @@ namespace WinMan.Implementation.Win32
                 EVENT_OBJECT_NAMECHANGE,
             }, OnWinEvent);
 
-            m_hTimer = SetTimer(m_msgWnd, IDT_TIMER_WATCH, TIMER_WATCH_INTERVAL, null);
+            m_hTimer = SetTimer(m_msgWnd, IDT_TIMER_WATCH, (uint)m_watchInterval.TotalMilliseconds, null);
             if (m_hTimer == IntPtr.Zero)
             {
                 throw new Win32Exception();
