@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 
 using static WinMan.Implementation.Win32.NativeMethods;
 
@@ -9,10 +10,13 @@ namespace WinMan.Implementation.Win32
         private static readonly bool IsPerMonitorDPISupported = Environment.OSVersion.Version.Major > 6
             || (Environment.OSVersion.Version.Major == 6 && Environment.OSVersion.Version.Minor >= 3);
 
-        public event DisplayChangedHandler Removed;
-        public event DisplayWorkAreaChangedHandler WorkAreaChanged;
-        public event DisplayBoundsChangedHandler BoundsChanged;
-        public event DisplayScalingChangedHandler ScalingChanged;
+        public event EventHandler<DisplayChangedEventArgs> Removed;
+
+        public event EventHandler<DisplayRectangleChangedEventArgs> WorkAreaChanged;
+
+        public event EventHandler<DisplayRectangleChangedEventArgs> BoundsChanged;
+
+        public event EventHandler<DisplayScalingChangedEventArgs> ScalingChanged;
 
         public Rectangle WorkArea
         {
@@ -93,7 +97,7 @@ namespace WinMan.Implementation.Win32
                     oldWorkArea = m_workArea;
                     m_workArea = newWorkArea;
                 }
-                WorkAreaChanged?.Invoke(this, oldWorkArea);
+                WorkAreaChanged?.Invoke(this, new DisplayRectangleChangedEventArgs(this, newWorkArea, oldWorkArea));
             }
 
             if (newBounds != m_bounds)
@@ -104,7 +108,7 @@ namespace WinMan.Implementation.Win32
                     oldBounds = m_bounds;
                     m_bounds = newBounds;
                 }
-                BoundsChanged?.Invoke(this, oldBounds);
+                BoundsChanged?.Invoke(this, new DisplayRectangleChangedEventArgs(this, newBounds, oldBounds));
             }
 
             if (newScaling != m_scaling)
@@ -115,13 +119,13 @@ namespace WinMan.Implementation.Win32
                     oldScaling = m_scaling;
                     m_scaling = newScaling;
                 }
-                ScalingChanged?.Invoke(this, newScaling);
+                ScalingChanged?.Invoke(this, new DisplayScalingChangedEventArgs(this, newScaling, oldScaling));
             }
         }
 
         internal void OnRemoved()
         {
-            Removed?.Invoke(this);
+            Removed?.Invoke(this, new DisplayChangedEventArgs(this));
         }
 
         private double GetDpiScale()
@@ -135,6 +139,17 @@ namespace WinMan.Implementation.Win32
             {
                 return 1.0;
             }
+        }
+
+        public override bool Equals(object obj)
+        {
+            return obj is Win32Display display &&
+                   EqualityComparer<IntPtr>.Default.Equals(Handle, display.Handle);
+        }
+
+        public override int GetHashCode()
+        {
+            return 1786700523 + Handle.GetHashCode();
         }
     }
 }

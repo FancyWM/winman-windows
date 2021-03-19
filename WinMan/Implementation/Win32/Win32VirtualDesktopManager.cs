@@ -39,9 +39,9 @@ namespace WinMan.Implementation.Win32
             }
         }
 
-        public event VirtualDesktopAddedEventHandler DesktopAdded;
-        public event VirtualDesktopRemovedEventHandler DesktopRemoved;
-        public event VirtualDesktopChangedEventHandler CurrentDesktopChanged;
+        public event EventHandler<DesktopChangedEventArgs> DesktopAdded;
+        public event EventHandler<DesktopChangedEventArgs> DesktopRemoved;
+        public event EventHandler<CurrentDesktopChangedEventArgs> CurrentDesktopChanged;
 
         public Win32VirtualDesktopManager(Win32Workspace workspace)
         {
@@ -111,11 +111,11 @@ namespace WinMan.Implementation.Win32
             }
         }
 
-        internal bool IsNotOnCurrentDesktop(IWindow window)
+        internal bool IsNotOnCurrentDesktop(IntPtr hwnd)
         {
             try
             {
-                return !DesktopManager.VirtualDesktopManager.IsWindowOnCurrentVirtualDesktop(window.Handle);
+                return !DesktopManager.VirtualDesktopManager.IsWindowOnCurrentVirtualDesktop(hwnd);
             }
             catch (COMException e) when ((uint)e.HResult == /*TYPE_E_ELEMENTNOTFOUND*/ 0x8002802B)
             {
@@ -145,9 +145,9 @@ namespace WinMan.Implementation.Win32
                 {
                     for (int i = oldDesktopCount; i < newDesktopCount; i++)
                     {
-                        var newDesktop = new Win32VirtualDesktop(m_workspace, Desktop.FromIndex(i));
-                        m_desktops.Add(newDesktop);
-                        addedDesktops.Add(newDesktop);
+                        var newInstance = new Win32VirtualDesktop(m_workspace, Desktop.FromIndex(i));
+                        m_desktops.Add(newInstance);
+                        addedDesktops.Add(newInstance);
                     }
                 }
             }
@@ -168,7 +168,7 @@ namespace WinMan.Implementation.Win32
                 {
                     try
                     {
-                        DesktopRemoved?.Invoke(desktop);
+                        DesktopRemoved?.Invoke(this, new DesktopChangedEventArgs(desktop));
                     }
                     catch (Exception e)
                     {
@@ -181,7 +181,7 @@ namespace WinMan.Implementation.Win32
             {
                 try
                 {
-                    DesktopAdded?.Invoke(desktop);
+                    DesktopAdded?.Invoke(this, new DesktopChangedEventArgs(desktop));
                 }
                 catch (Exception e)
                 {
@@ -196,6 +196,7 @@ namespace WinMan.Implementation.Win32
 
             int newCurrentDesktop = Desktop.FromDesktop(Desktop.Current);
             int oldCurrentDesktop;
+            IVirtualDesktop newDesktop;
             IVirtualDesktop oldDesktop;
 
             lock (m_syncRoot)
@@ -206,11 +207,12 @@ namespace WinMan.Implementation.Win32
                 {
                     m_currentDesktop = newCurrentDesktop;
                 }
+                newDesktop = m_desktops[newCurrentDesktop];
             }
 
             if (oldCurrentDesktop != newCurrentDesktop)
             {
-                CurrentDesktopChanged?.Invoke(CurrentDesktop, oldDesktop);
+                CurrentDesktopChanged?.Invoke(this, new CurrentDesktopChangedEventArgs(newDesktop, oldDesktop));
             }
         }
     }

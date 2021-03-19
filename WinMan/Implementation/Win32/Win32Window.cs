@@ -9,22 +9,22 @@ using static WinMan.Implementation.Win32.NativeMethods;
 
 namespace WinMan.Implementation.Win32
 {
-    [DebuggerDisplay("Handle = {Handle}, Title = {TitleInternal}")]
+    [DebuggerDisplay("Handle = {Handle}, Title = {Title}")]
     internal class Win32Window : IWindow
     {
-        public event WindowUpdatedEventHandler Added;
-        public event WindowUpdatedEventHandler Removed;
-        public event WindowUpdatedEventHandler Destroyed;
+        public event EventHandler<WindowChangedEventArgs> Added;
+        public event EventHandler<WindowChangedEventArgs> Removed;
+        public event EventHandler<WindowChangedEventArgs> Destroyed;
 
-        public event WindowUpdatedEventHandler GotFocus;
-        public event WindowUpdatedEventHandler LostFocus;
+        public event EventHandler<WindowFocusChangedEventArgs> GotFocus;
+        public event EventHandler<WindowFocusChangedEventArgs> LostFocus;
 
-        public event WindowPositionChangedEventHandler PositionChangeStart;
-        public event WindowPositionChangedEventHandler PositionChangeEnd;
-        public event WindowPositionChangedEventHandler PositionChanged;
-        public event WindowStateChangedEventHandler StateChanged;
-        public event WindowUpdatedEventHandler TopmostChanged;
-        public event WindowTitleChangedEventHandler TitleChanged;
+        public event EventHandler<WindowPositionChangedEventArgs> PositionChangeStart;
+        public event EventHandler<WindowPositionChangedEventArgs> PositionChangeEnd;
+        public event EventHandler<WindowPositionChangedEventArgs> PositionChanged;
+        public event EventHandler<WindowStateChangedEventArgs> StateChanged;
+        public event EventHandler<WindowTopmostChangedEventArgs> TopmostChanged;
+        public event EventHandler<WindowTitleChangedEventArgs> TitleChanged;
 
         public IntPtr Handle => m_hwnd;
 
@@ -76,15 +76,15 @@ namespace WinMan.Implementation.Win32
 
         public bool IsFocused => UseDefaults(() => m_isFocused, false);
 
-        public bool CanResize => UseDefaults(() => GetWindowStyles().HasFlag(WindowStyles.WS_SIZEFRAME) && ProbeAccess(), false);
+        public bool CanResize => UseDefaults(() => GetWindowStyles(m_hwnd).HasFlag(WindowStyles.WS_SIZEFRAME) && ProbeAccess(), false);
 
         public bool CanMove => UseDefaults(() => State == WindowState.Restored && ProbeAccess(), false);
 
         public bool CanReorder => UseDefaults(() => ProbeAccess(), false);
 
-        public bool CanMinimize => UseDefaults(() => GetWindowStyles().HasFlag(WindowStyles.WS_MINIMIZEBOX) && ProbeAccess(), false);
+        public bool CanMinimize => UseDefaults(() => GetWindowStyles(m_hwnd).HasFlag(WindowStyles.WS_MINIMIZEBOX) && ProbeAccess(), false);
 
-        public bool CanMaximize => UseDefaults(() => GetWindowStyles().HasFlag(WindowStyles.WS_MAXIMIZEBOX) && ProbeAccess(), false);
+        public bool CanMaximize => UseDefaults(() => GetWindowStyles(m_hwnd).HasFlag(WindowStyles.WS_MAXIMIZEBOX) && ProbeAccess(), false);
 
         public bool CanCreateLiveThumbnail => true;
 
@@ -108,23 +108,7 @@ namespace WinMan.Implementation.Win32
             }
         }
 
-        internal bool IsTopLevelVisible => GetIsTopLevelVisible();
-
-        internal string TitleInternal
-        {
-            get
-            {
-                try
-                {
-                    int len = GetWindowTextLengthSafe();
-                    return GetWindowTextSafe(len);
-                }
-                catch
-                {
-                    return "";
-                }
-            }
-        }
+        internal bool IsTopLevelVisible => GetIsTopLevelVisible(m_workspace, m_hwnd);
 
         public Process Process => GetProcess();
 
@@ -169,6 +153,8 @@ namespace WinMan.Implementation.Win32
         }
 
         public Rectangle FrameMargins => UseDefaults(() => GetFrameMargins(), default);
+
+        private const string InvalidHandleTitle = "[Invalid handle]";
 
         private readonly object m_syncRoot = new object();
 
@@ -219,7 +205,7 @@ namespace WinMan.Implementation.Win32
             m_hwnd = hwnd;
             m_isDead = false;
             m_oldHwndPrev = PreviousWindow?.Handle ?? IntPtr.Zero;
-            m_title = TitleInternal;
+            m_title = GetTitle(throwOnError: true);
         }
 
         public void Close()
@@ -386,11 +372,16 @@ namespace WinMan.Implementation.Win32
             {
                 return;
             }
+
+            Rectangle oldPosition, newPosition;
             lock (m_syncRoot)
             {
+                oldPosition = m_initialPosition;
+                newPosition = m_position;
                 m_initialPosition = m_position;
             }
-            PositionChangeStart?.Invoke(this, m_initialPosition);
+
+            PositionChangeStart?.Invoke(this, new WindowPositionChangedEventArgs(this, newPosition, oldPosition));
         }
 
         internal void OnMoveSizeEnd()
@@ -400,17 +391,16 @@ namespace WinMan.Implementation.Win32
                 return;
             }
             UpdateConfiguration();
-            try
+
+            Rectangle oldPosition, newPosition;
+            lock (m_syncRoot)
             {
-                PositionChangeEnd?.Invoke(this, m_initialPosition);
+                oldPosition = m_initialPosition;
+                newPosition = m_position;
+                m_initialPosition = m_position;
             }
-            finally
-            {
-                lock (m_syncRoot)
-                {
-                    m_initialPosition = m_position;
-                }
-            }
+
+            PositionChangeEnd?.Invoke(this, new WindowPositionChangedEventArgs(this, newPosition, oldPosition));
         }
 
         internal void OnForeground()
@@ -423,7 +413,7 @@ namespace WinMan.Implementation.Win32
             {
                 m_isFocused = true;
             }
-            GotFocus?.Invoke(this);
+            GotFocus?.Invoke(this, new WindowFocusChangedEventArgs(this, true));
         }
 
         internal void OnBackground()
@@ -436,12 +426,12 @@ namespace WinMan.Implementation.Win32
             {
                 m_isFocused = false;
             }
-            LostFocus?.Invoke(this);
+            GotFocus?.Invoke(this, new WindowFocusChangedEventArgs(this, false));
         }
 
         internal void OnTitleChange()
         {
-            var newTitle = UseDefaults(() => TitleInternal, "[Invalid Handle]");
+            var newTitle = GetTitle(throwOnError: false);
             string oldTitle;
             lock (m_syncRoot)
             {
@@ -451,7 +441,7 @@ namespace WinMan.Implementation.Win32
 
             if (oldTitle != newTitle)
             {
-                TitleChanged?.Invoke(this, oldTitle);
+                TitleChanged?.Invoke(this, new WindowTitleChangedEventArgs(this, newTitle, oldTitle));
             }
         }
 
@@ -470,12 +460,12 @@ namespace WinMan.Implementation.Win32
         internal void OnAdded()
         {
             UpdateConfiguration();
-            Added?.Invoke(this);
+            Added?.Invoke(this, new WindowChangedEventArgs(this));
         }
 
         internal void OnRemoved()
         {
-            Removed?.Invoke(this);
+            Removed?.Invoke(this, new WindowChangedEventArgs(this));
         }
 
         internal void OnStateChanged()
@@ -492,7 +482,7 @@ namespace WinMan.Implementation.Win32
             try
             {
                 m_isDead = true;
-                Destroyed?.Invoke(this);
+                Destroyed?.Invoke(this, new WindowChangedEventArgs(this));
             }
             finally
             {
@@ -505,6 +495,20 @@ namespace WinMan.Implementation.Win32
                 PositionChangeEnd = null;
                 TopmostChanged = null;
             }
+        }
+
+        private string GetTitle(bool throwOnError)
+        {
+            StringBuilder sb = new StringBuilder(128);
+            if (IntPtr.Zero == SendMessageTimeoutText(m_hwnd, WM_GETTEXT, new IntPtr(sb.Capacity), sb, SendMessageTimeoutFlags.SMTO_NORMAL | SendMessageTimeoutFlags.SMTO_ABORTIFHUNG, 3000, out _))
+            {
+                if (throwOnError)
+                {
+                    CheckAlive();
+                }
+                return InvalidHandleTitle;
+            }
+            return sb.ToString();
         }
 
         private Rectangle GetFrameMargins()
@@ -546,27 +550,27 @@ namespace WinMan.Implementation.Win32
             }
         }
 
-        private bool GetIsTopLevelVisible()
+        internal static bool GetIsTopLevelVisible(IWorkspace workspace, IntPtr hwnd)
         {
             try
             {
-                if (!IsWindowVisible(m_hwnd))
+                if (!IsWindowVisible(hwnd))
                 {
                     return false;
                 }
 
-                if (m_hwnd != GetAncestor(m_hwnd, GA.GetRoot))
+                if (hwnd != GetAncestor(hwnd, GA.GetRoot))
                 {
                     return false;
                 }
 
-                WindowStyles style = GetWindowStyles();
+                WindowStyles style = GetWindowStyles(hwnd);
                 if (style.HasFlag(WindowStyles.WS_CHILD))
                 {
                     return false;
                 }
 
-                ExtendedWindowStyles exStyle = GetExtendedWindowStyles();
+                ExtendedWindowStyles exStyle = GetExtendedWindowStyles(hwnd);
 
                 bool isToolWindow = exStyle.HasFlag(ExtendedWindowStyles.WS_EX_TOOLWINDOW);
                 if (isToolWindow)
@@ -576,12 +580,12 @@ namespace WinMan.Implementation.Win32
 
                 bool CheckCloaked()
                 {
-                    uint cloaked = GetDwordDwmWindowAttribute(m_hwnd, DWMWINDOWATTRIBUTE.Cloaked);
+                    uint cloaked = GetDwordDwmWindowAttribute(hwnd, DWMWINDOWATTRIBUTE.Cloaked);
                     if (cloaked > 0)
                     {
-                        if (cloaked == DWM_CLOAKED_SHELL && m_workspace.VirtualDesktopManager is Win32VirtualDesktopManager vdm)
+                        if (cloaked == DWM_CLOAKED_SHELL && workspace.VirtualDesktopManager is Win32VirtualDesktopManager vdm)
                         {
-                            return vdm.IsNotOnCurrentDesktop(this);
+                            return vdm.IsNotOnCurrentDesktop(hwnd);
                         }
                         else
                         {
@@ -594,7 +598,7 @@ namespace WinMan.Implementation.Win32
                 bool isAppWindow = exStyle.HasFlag(ExtendedWindowStyles.WS_EX_APPWINDOW);
                 if (isAppWindow)
                 {
-                    return CheckCloaked() && GetWindowTextLength(m_hwnd) != 0;
+                    return CheckCloaked() && GetWindowTextLength(hwnd) != 0;
                 }
 
                 bool hasEdge = exStyle.HasFlag(ExtendedWindowStyles.WS_EX_WINDOWEDGE);
@@ -602,13 +606,13 @@ namespace WinMan.Implementation.Win32
 
                 if (hasEdge || isTopmostOnly || exStyle == 0)
                 {
-                    return CheckCloaked() && GetWindowTextLength(m_hwnd) != 0;
+                    return CheckCloaked() && GetWindowTextLength(hwnd) != 0;
                 }
 
                 bool isAcceptFiles = exStyle.HasFlag(ExtendedWindowStyles.WS_EX_ACCEPTFILES);
                 if (isAcceptFiles /* && ShowStyle == ShowMaximized */)
                 {
-                    return CheckCloaked() && GetWindowTextLength(m_hwnd) != 0;
+                    return CheckCloaked() && GetWindowTextLength(hwnd) != 0;
                 }
 
                 return false;
@@ -632,14 +636,14 @@ namespace WinMan.Implementation.Win32
             return value;
         }
 
-        internal WindowStyles GetWindowStyles()
+        internal static WindowStyles GetWindowStyles(IntPtr hwnd)
         {
-            return (WindowStyles)GetWindowLong(m_hwnd, WindowLongParam.GWL_STYLE).ToInt64();
+            return (WindowStyles)GetWindowLong(hwnd, WindowLongParam.GWL_STYLE).ToInt64();
         }
 
-        internal ExtendedWindowStyles GetExtendedWindowStyles()
+        internal static ExtendedWindowStyles GetExtendedWindowStyles(IntPtr hwnd)
         {
-            return (ExtendedWindowStyles)GetWindowLong(m_hwnd, WindowLongParam.GWL_EXSTYLE).ToInt64();
+            return (ExtendedWindowStyles)GetWindowLong(hwnd, WindowLongParam.GWL_EXSTYLE).ToInt64();
         }
 
         internal WINDOWPLACEMENT GetWindowPlacementSafe()
@@ -665,39 +669,6 @@ namespace WinMan.Implementation.Win32
                 return WindowState.Minimized;
             }
             return WindowState.Restored;
-        }
-
-        private int GetWindowTextLengthSafe()
-        {
-            IntPtr length = new IntPtr(1);
-            if (IntPtr.Zero == SendMessageTimeout(m_hwnd, WM_GETTEXTLENGTH, IntPtr.Zero, IntPtr.Zero, SendMessageTimeoutFlags.SMTO_NORMAL | SendMessageTimeoutFlags.SMTO_ABORTIFHUNG, 3000, out length))
-            {
-                if (length != IntPtr.Zero)
-                {
-                    CheckAlive();
-                    throw new Win32Exception();
-                }
-            }
-            return length.ToInt32();
-        }
-
-        private string GetWindowTextSafe(int length)
-        {
-            StringBuilder sb = new StringBuilder(length + 1);
-
-            IntPtr copied;
-            if (IntPtr.Zero == SendMessageTimeoutText(m_hwnd, WM_GETTEXT, new IntPtr(length + 1), sb, SendMessageTimeoutFlags.SMTO_NORMAL | SendMessageTimeoutFlags.SMTO_ABORTIFHUNG, 3000, out copied))
-            {
-                CheckAlive();
-                throw new Win32Exception();
-            }
-
-            if (copied.ToInt32() < length)
-            {
-                CheckAlive();
-                throw new IndexOutOfRangeException("Insufficient buffer size");
-            }
-            return sb.ToString();
         }
 
         private Rectangle GetWindowRectSafe()
@@ -730,7 +701,7 @@ namespace WinMan.Implementation.Win32
                 state = FromSW(wplc.showCmd);
 
                 placement = GetWindowRectSafe();
-                isTopmost = GetExtendedWindowStyles().HasFlag(ExtendedWindowStyles.WS_EX_TOPMOST);
+                isTopmost = GetExtendedWindowStyles(m_hwnd).HasFlag(ExtendedWindowStyles.WS_EX_TOPMOST);
                 if (state == WindowState.Restored && m_workspace.DisplayManager.Displays.Any(x => x.Bounds == placement))
                 {
                     state = WindowState.Maximized;
@@ -758,7 +729,7 @@ namespace WinMan.Implementation.Win32
 
             if (oldPosition != newPosition)
             {
-                PositionChanged?.Invoke(this, oldPosition);
+                PositionChanged?.Invoke(this, new WindowPositionChangedEventArgs(this, newPosition, oldPosition));
             }
         }
 
@@ -773,7 +744,7 @@ namespace WinMan.Implementation.Win32
 
             if (oldState != newState)
             {
-                StateChanged?.Invoke(this, oldState);
+                StateChanged?.Invoke(this, new WindowStateChangedEventArgs(this, newState, oldState));
             }
         }
 
@@ -788,7 +759,7 @@ namespace WinMan.Implementation.Win32
 
             if (oldIsTopmost != newIsTopmost)
             {
-                TopmostChanged?.Invoke(this);
+                TopmostChanged?.Invoke(this, new WindowTopmostChangedEventArgs(this, newIsTopmost));
             }
         }
 

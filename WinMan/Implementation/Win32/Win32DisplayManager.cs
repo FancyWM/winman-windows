@@ -11,10 +11,10 @@ namespace WinMan.Implementation.Win32
     internal class Win32DisplayManager : IDisplayManager
     {
         // TODO: Implements hotplug detection
-        public event DisplayChangedHandler Added;
-        public event DisplayChangedHandler Removed;
-        public event VirtualDisplayBoundsChangedHandler VirtualDisplayBoundsChanged;
-        public event PrimaryDisplayChangedHandler PrimaryDisplayChanged;
+        public event EventHandler<DisplayChangedEventArgs> Added;
+        public event EventHandler<DisplayChangedEventArgs> Removed;
+        public event EventHandler<DisplayRectangleChangedEventArgs> VirtualDisplayBoundsChanged;
+        public event EventHandler<PrimaryDisplayChangedEventArgs> PrimaryDisplayChanged;
 
         public Rectangle VirtualDisplayBounds
         {
@@ -115,7 +115,7 @@ namespace WinMan.Implementation.Win32
             {
                 foreach (var added in addedDisplays)
                 {
-                    Added?.Invoke(added);
+                    Added?.Invoke(added, new DisplayChangedEventArgs(added));
                 }
             }
             finally
@@ -128,7 +128,7 @@ namespace WinMan.Implementation.Win32
                     }
                     catch
                     {
-                        Removed?.Invoke(removed);
+                        Removed?.Invoke(removed, new DisplayChangedEventArgs(removed));
                     }
                 }
             }

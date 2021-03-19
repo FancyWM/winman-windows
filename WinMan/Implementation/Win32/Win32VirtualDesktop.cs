@@ -1,4 +1,5 @@
-﻿using System.Runtime.InteropServices;
+﻿using System;
+using System.Runtime.InteropServices;
 using WinMan.Implementation.Win32.VirtualDesktop;
 
 namespace WinMan.Implementation.Win32
@@ -8,7 +9,7 @@ namespace WinMan.Implementation.Win32
         private readonly Win32Workspace m_workspace;
         private readonly Desktop m_desktop;
 
-        public event VirtualDesktopRemovedEventHandler Removed;
+        public event EventHandler<DesktopChangedEventArgs> Removed;
 
         public Win32VirtualDesktop(Win32Workspace workspace, Desktop desktop)
         {
@@ -86,7 +87,7 @@ namespace WinMan.Implementation.Win32
         {
             try
             {
-                Removed?.Invoke(this);
+                Removed?.Invoke(this, new DesktopChangedEventArgs(this));
             }
             finally
             {
