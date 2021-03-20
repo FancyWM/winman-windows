@@ -51,7 +51,7 @@ namespace WinMan.Windows
         public Win32DisplayManager(Win32Workspace workspace)
         {
             m_workspace = workspace;
-            m_displays = GetMonitors().Select(x => new Win32Display(this, x)).ToHashSet();
+            m_displays = new HashSet<Win32Display>(GetMonitors().Select(x => new Win32Display(this, x)));
         }
 
         private List<IntPtr> GetMonitors()
