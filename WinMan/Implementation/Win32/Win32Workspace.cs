@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.Diagnostics;
 using System.Linq;
 using System.Threading;
 
@@ -18,7 +19,18 @@ namespace WinMan.Implementation.Win32
         public event EventHandler<WindowChangedEventArgs> WindowManaging;
         public event UnhandledExceptionEventHandler UnhandledException;
 
-        private static readonly IntPtr IDT_TIMER_WATCH = new IntPtr(1);
+        // Time period over which to aggressively dirty-check for changes.
+        // This is to accommodate windows which take longer to initialise properly.
+        private const long RecentWindowDuration = 200;
+
+        /// <summary>
+        /// Timer to watch the whole environment for changes that are not detected as events.
+        /// </summary>
+        private static readonly IntPtr IdtTimerWatch = new IntPtr(1);
+        /// <summary>
+        /// Timer to actively watch recently created windows.
+        /// </summary>
+        private static readonly IntPtr IdtRecentTimerWatch = new IntPtr(2);
 
         private readonly object m_initSyncRoot = new object();
 
@@ -26,12 +38,15 @@ namespace WinMan.Implementation.Win32
         private Thread m_eventLoopThread;
         private Deleter m_winEventHook;
         private IntPtr m_hTimer;
+        private IntPtr m_hTimerNew;
         private bool m_isShuttingDown = false;
-        private TimeSpan m_watchInterval = TimeSpan.FromMilliseconds(250);
+        private TimeSpan m_watchInterval = TimeSpan.FromMilliseconds(200);
 
         private HashSet<Win32Window> m_visibleWindows = new HashSet<Win32Window>();
         private List<Win32WindowHandle> m_windowList = new List<Win32WindowHandle>();
         private Dictionary<IntPtr, Win32WindowHandle> m_windowSet = new Dictionary<IntPtr, Win32WindowHandle>();
+        private Stopwatch m_stopwatch = new Stopwatch();
+        private List<(long timestamp, Win32WindowHandle handle)> m_recentWindowList = new List<(long timestamp, Win32WindowHandle handle)>();
         private IntPtr m_hwndFocused = IntPtr.Zero;
 
         private IVirtualDesktopManager m_virtualDesktops = null;
@@ -155,16 +170,20 @@ namespace WinMan.Implementation.Win32
                 }
 
                 m_eventLoopThread.Start();
+                m_stopwatch.Start();
             }
         }
 
         public IWindow FindWindow(IntPtr windowHandle)
         {
             CheckOpen();
+            Win32WindowHandle handle;
             lock (m_windowList)
             {
-                return m_windowList.FirstOrDefault(x => x.Handle == windowHandle)?.WindowObject;
+                handle = m_windowList.FirstOrDefault(x => x.Handle == windowHandle);
             }
+            handle?.EnsureWindowObject(this);
+            return handle?.WindowObject;
         }
 
         public IReadOnlyList<IWindow> GetSnapshot()
@@ -270,7 +289,8 @@ namespace WinMan.Implementation.Win32
                 EVENT_OBJECT_NAMECHANGE,
             }, OnWinEvent);
 
-            m_hTimer = SetTimer(m_msgWnd, IDT_TIMER_WATCH, (uint)m_watchInterval.TotalMilliseconds, null);
+            m_hTimer = SetTimer(m_msgWnd, IdtTimerWatch, (uint)m_watchInterval.TotalMilliseconds, null);
+            m_hTimerNew = SetTimer(m_msgWnd, IdtRecentTimerWatch, 10, null);
             if (m_hTimer == IntPtr.Zero)
             {
                 throw new Win32Exception();
@@ -289,7 +309,14 @@ namespace WinMan.Implementation.Win32
                 switch (msg)
                 {
                     case WM_TIMER:
-                        OnTimerWatch();
+                        if ((IntPtr)(long)wParam == IdtTimerWatch)
+                        {
+                            OnTimerWatch();
+                        }
+                        else if ((IntPtr)(long)wParam == IdtRecentTimerWatch)
+                        {
+                            OnRecentTimerWatch();
+                        }
                         break;
                     case WM_DISPLAYCHANGE:
                         OnDisplayChange();
@@ -329,6 +356,35 @@ namespace WinMan.Implementation.Win32
             // For example, virtual desktop addition/removal or windows changing their windowstyles at runtime
             // cannot be observed directly.
             RefreshConfiguration();
+        }
+
+        /// <summary>
+        /// An alternative timer with the highest possible resolution that checks only the newly created windows for changes.
+        /// </summary>
+        private void OnRecentTimerWatch()
+        {
+            var cleanedList = new List<(long timestamp, Win32WindowHandle handle)>();
+            var checkList = new List<Win32WindowHandle>();
+            var now = m_stopwatch.ElapsedMilliseconds;
+
+            lock (m_recentWindowList)
+            {
+                foreach (var (t, w) in m_recentWindowList)
+                {
+                    if ((now - t) <= RecentWindowDuration)
+                    {
+                        cleanedList.Add((t, w));
+                    }
+                    checkList.Add(w);
+                }
+
+                m_recentWindowList = cleanedList;
+            }
+
+            foreach (var w in checkList)
+            {
+                CheckVisibilityChanges(w);
+            }
         }
 
         private uint m_lastEventType = EVENT_MIN - 1;
@@ -460,6 +516,13 @@ namespace WinMan.Implementation.Win32
                     finally
                     {
                         WindowAdded?.Invoke(this, new WindowChangedEventArgs(window.WindowObject));
+                    }
+                }
+                else
+                {
+                    lock (m_recentWindowList)
+                    {
+                        m_recentWindowList.Add((m_stopwatch.ElapsedMilliseconds, window));
                     }
                 }
             }
