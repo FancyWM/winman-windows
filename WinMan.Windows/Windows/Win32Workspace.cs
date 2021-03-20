@@ -502,14 +502,14 @@ namespace WinMan.Windows
                 m_windowList.Add(window);
             }
 
-            try
+            if (GetVisibility(window))
             {
-                if (GetVisibility(window))
+                lock (m_visibleWindows)
                 {
-                    lock (m_visibleWindows)
-                    {
-                        m_visibleWindows.Add(window.WindowObject);
-                    }
+                    m_visibleWindows.Add(window.WindowObject);
+                }
+                try
+                {
                     try
                     {
                         window.WindowObject.OnAdded();
@@ -519,19 +519,19 @@ namespace WinMan.Windows
                         WindowAdded?.Invoke(this, new WindowChangedEventArgs(window.WindowObject));
                     }
                 }
-                else
+                finally
                 {
-                    lock (m_recentWindowList)
+                    if (GetForegroundWindow() == hwnd)
                     {
-                        m_recentWindowList.Add((m_stopwatch.ElapsedMilliseconds, window));
+                        OnWindowForeground(hwnd);
                     }
                 }
             }
-            finally
+            else
             {
-                if (GetForegroundWindow() == hwnd)
+                lock (m_recentWindowList)
                 {
-                    OnWindowForeground(hwnd);
+                    m_recentWindowList.Add((m_stopwatch.ElapsedMilliseconds, window));
                 }
             }
         }
@@ -599,30 +599,17 @@ namespace WinMan.Windows
                 {
                     window.WindowObject?.OnBackground();
                 }
-                else
-                {
-                    IntPtr hwndRoot = GetAncestor(m_hwndFocused, GA.GetRoot);
-                    if (m_windowSet.TryGetValue(hwndRoot, out window))
-                    {
-                        window.WindowObject?.OnBackground();
-                    }
-                }
             }
             finally
             {
-                m_hwndFocused = hwnd;
-
-                if (m_windowSet.TryGetValue(hwnd, out var window))
+                if (m_windowSet.TryGetValue(hwnd, out var window) && window.WindowObject != null)
                 {
+                    m_hwndFocused = hwnd;
                     window.WindowObject?.OnForeground();
                 }
                 else
                 {
-                    IntPtr hwndRoot = GetAncestor(hwnd, GA.GetRoot);
-                    if (m_windowSet.TryGetValue(hwndRoot, out window))
-                    {
-                        window.WindowObject?.OnForeground();
-                    }
+                    m_hwndFocused = IntPtr.Zero;
                 }
             }
         }
@@ -664,11 +651,21 @@ namespace WinMan.Windows
                     }
                     try
                     {
-                        window.WindowObject.OnAdded();
+                        try
+                        {
+                            window.WindowObject.OnAdded();
+                        }
+                        finally
+                        {
+                            WindowAdded?.Invoke(this, new WindowChangedEventArgs(window.WindowObject));
+                        }
                     }
                     finally
                     {
-                        WindowAdded?.Invoke(this, new WindowChangedEventArgs(window.WindowObject));
+                        if (GetForegroundWindow() == window.Handle)
+                        {
+                            OnWindowForeground(window.Handle);
+                        }
                     }
                 }
                 else

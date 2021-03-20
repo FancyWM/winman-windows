@@ -424,7 +424,7 @@ namespace WinMan.Windows
             {
                 m_isFocused = false;
             }
-            GotFocus?.Invoke(this, new WindowFocusChangedEventArgs(this, false));
+            LostFocus?.Invoke(this, new WindowFocusChangedEventArgs(this, false));
         }
 
         internal void OnTitleChange()
