@@ -38,7 +38,7 @@ namespace WinMan.Implementation.Win32
         private Thread m_eventLoopThread;
         private Deleter m_winEventHook;
         private IntPtr m_hTimer;
-        private IntPtr m_hTimerNew;
+        private IntPtr m_hTimerRecent;
         private bool m_isShuttingDown = false;
         private TimeSpan m_watchInterval = TimeSpan.FromMilliseconds(200);
 
@@ -239,6 +239,7 @@ namespace WinMan.Implementation.Win32
         public void Dispose()
         {
             KillTimer(IntPtr.Zero, m_hTimer);
+            KillTimer(IntPtr.Zero, m_hTimerRecent);
             m_isShuttingDown = true;
             m_winEventHook?.Dispose();
             m_eventLoopThread?.Join();
@@ -290,8 +291,8 @@ namespace WinMan.Implementation.Win32
             }, OnWinEvent);
 
             m_hTimer = SetTimer(m_msgWnd, IdtTimerWatch, (uint)m_watchInterval.TotalMilliseconds, null);
-            m_hTimerNew = SetTimer(m_msgWnd, IdtRecentTimerWatch, 10, null);
-            if (m_hTimer == IntPtr.Zero)
+            m_hTimerRecent = SetTimer(m_msgWnd, IdtRecentTimerWatch, 10, null);
+            if (m_hTimer == IntPtr.Zero || m_hTimerRecent == IntPtr.Zero)
             {
                 throw new Win32Exception();
             }
