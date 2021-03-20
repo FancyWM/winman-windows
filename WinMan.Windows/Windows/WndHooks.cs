@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Runtime.InteropServices;
 
-namespace WinMan.Implementation.Win32
+namespace WinMan.Windows
 {
     internal static class WndHooks
     {

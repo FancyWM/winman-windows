@@ -3,11 +3,11 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using System.Linq;
 
-using WinMan.Utilities;
+using WinMan.Windows.Utilities;
 
-using static WinMan.Implementation.Win32.NativeMethods;
+using static WinMan.Windows.NativeMethods;
 
-namespace WinMan.Implementation.Win32
+namespace WinMan.Windows
 {
     internal delegate void WinEventCallback(uint eventType, IntPtr hwnd, int idObject, int idChild, uint idEventThread, uint dwmsEventTime);
 

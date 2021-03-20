@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Threading;
 
-namespace WinMan.Implementation.Win32
+namespace WinMan.Windows
 {
     /// <summary>
     /// Win32WindowHandles are much lighter in terms of memory consumption when compared to Win32Window.

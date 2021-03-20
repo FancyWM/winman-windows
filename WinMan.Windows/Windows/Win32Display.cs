@@ -1,11 +1,11 @@
 ﻿using System;
 using System.Collections.Generic;
 
-using static WinMan.Implementation.Win32.NativeMethods;
+using static WinMan.Windows.NativeMethods;
 
-namespace WinMan.Implementation.Win32
+namespace WinMan.Windows
 {
-    internal class Win32Display : IDisplay
+    public class Win32Display : IDisplay
     {
         private static readonly bool IsPerMonitorDPISupported = Environment.OSVersion.Version.Major > 6
             || (Environment.OSVersion.Version.Major == 6 && Environment.OSVersion.Version.Minor >= 3);

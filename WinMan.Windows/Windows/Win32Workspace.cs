@@ -5,13 +5,13 @@ using System.Diagnostics;
 using System.Linq;
 using System.Threading;
 
-using WinMan.Utilities;
+using WinMan.Windows.Utilities;
 
-using static WinMan.Implementation.Win32.NativeMethods;
+using static WinMan.Windows.NativeMethods;
 
-namespace WinMan.Implementation.Win32
+namespace WinMan.Windows
 {
-    class Win32Workspace : IWorkspace
+    public class Win32Workspace : IWorkspace
     {
         public event EventHandler<WindowChangedEventArgs> WindowAdded;
         public event EventHandler<WindowChangedEventArgs> WindowRemoved;

@@ -4,11 +4,11 @@ using System.ComponentModel;
 using System.Linq;
 using System.Runtime.InteropServices;
 
-using static WinMan.Implementation.Win32.NativeMethods;
+using static WinMan.Windows.NativeMethods;
 
-namespace WinMan.Implementation.Win32
+namespace WinMan.Windows
 {
-    internal class Win32DisplayManager : IDisplayManager
+    public class Win32DisplayManager : IDisplayManager
     {
         // TODO: Implements hotplug detection
         public event EventHandler<DisplayChangedEventArgs> Added;

@@ -2,11 +2,11 @@
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
 
-using WinMan.Implementation.Win32.VirtualDesktop;
+using WinMan.Windows.VirtualDesktop;
 
-namespace WinMan.Implementation.Win32
+namespace WinMan.Windows
 {
-    internal class Win32VirtualDesktopManager : IVirtualDesktopManager
+    public class Win32VirtualDesktopManager : IVirtualDesktopManager
     {
         private readonly object m_syncRoot = new object();
 

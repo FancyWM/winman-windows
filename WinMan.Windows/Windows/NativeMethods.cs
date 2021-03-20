@@ -2,7 +2,7 @@
 using System.Runtime.InteropServices;
 using System.Text;
 
-namespace WinMan.Implementation.Win32
+namespace WinMan.Windows
 {
     internal static class NativeMethods
     {

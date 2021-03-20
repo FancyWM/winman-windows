@@ -5,12 +5,12 @@ using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text;
 
-using static WinMan.Implementation.Win32.NativeMethods;
+using static WinMan.Windows.NativeMethods;
 
-namespace WinMan.Implementation.Win32
+namespace WinMan.Windows
 {
     [DebuggerDisplay("Handle = {Handle}, Title = {Title}")]
-    internal class Win32Window : IWindow
+    public class Win32Window : IWindow
     {
         public event EventHandler<WindowChangedEventArgs> Added;
         public event EventHandler<WindowChangedEventArgs> Removed;

@@ -1,17 +1,17 @@
 ﻿using System;
 using System.Runtime.InteropServices;
-using WinMan.Implementation.Win32.VirtualDesktop;
+using WinMan.Windows.VirtualDesktop;
 
-namespace WinMan.Implementation.Win32
+namespace WinMan.Windows
 {
-    internal class Win32VirtualDesktop : IVirtualDesktop
+    public class Win32VirtualDesktop : IVirtualDesktop
     {
         private readonly Win32Workspace m_workspace;
         private readonly Desktop m_desktop;
 
         public event EventHandler<DesktopChangedEventArgs> Removed;
 
-        public Win32VirtualDesktop(Win32Workspace workspace, Desktop desktop)
+        internal Win32VirtualDesktop(Win32Workspace workspace, Desktop desktop)
         {
             m_workspace = workspace;
             m_desktop = desktop;

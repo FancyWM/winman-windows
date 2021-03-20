@@ -11,7 +11,7 @@ using System.Text;
 
 // Based on http://stackoverflow.com/a/32417530, Windows 10 SDK, github project Grabacr07/VirtualDesktop and own research
 
-namespace WinMan.Implementation.Win32.VirtualDesktop
+namespace WinMan.Windows.VirtualDesktop
 {
 	#region COM API
 	internal static class Guids
@@ -319,7 +319,7 @@ namespace WinMan.Implementation.Win32.VirtualDesktop
 	#endregion
 
 	#region public interface
-	public class Desktop
+	internal class Desktop
 	{
 		// get process id to window handle
 		[DllImport("user32.dll")]
