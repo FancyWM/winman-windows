@@ -108,51 +108,9 @@ namespace WinMan.Windows
             }
         }
 
-        internal bool IsTopLevelVisible => GetIsTopLevelVisible(m_workspace, m_hwnd);
-
-        public Process Process => GetProcess();
-
-        public IWindow NextWindow
-        {
-            get
-            {
-                return UseDefaults(() =>
-                {
-                    IntPtr hwnd = m_hwnd;
-                    while ((hwnd = GetWindow(hwnd, GW.HWndNext)) != IntPtr.Zero)
-                    {
-                        IWindow window = m_workspace.UnsafeGetWindow(hwnd);
-                        if (window != null)
-                        {
-                            return window;
-                        }
-                    }
-                    return null;
-                }, null);
-            }
-        }
-
-        public IWindow PreviousWindow
-        {
-            get
-            {
-                return UseDefaults(() =>
-                {
-                    IntPtr hwnd = m_hwnd;
-                    while ((hwnd = GetWindow(hwnd, GW.HWndPrev)) != IntPtr.Zero)
-                    {
-                        IWindow window = m_workspace.UnsafeGetWindow(hwnd);
-                        if (window != null)
-                        {
-                            return window;
-                        }
-                    }
-                    return null;
-                }, null);
-            }
-        }
-
         public Rectangle FrameMargins => UseDefaults(() => GetFrameMargins(), default);
+
+        internal bool IsTopLevelVisible => GetIsTopLevelVisible(m_workspace, m_hwnd);
 
         private const string InvalidHandleTitle = "[Invalid handle]";
 
@@ -204,7 +162,7 @@ namespace WinMan.Windows
             m_workspace = workspace;
             m_hwnd = hwnd;
             m_isDead = false;
-            m_oldHwndPrev = PreviousWindow?.Handle ?? IntPtr.Zero;
+            m_oldHwndPrev = GetPreviousWindow()?.Handle ?? IntPtr.Zero;
             m_title = GetTitle(throwOnError: true);
         }
 
@@ -344,6 +302,46 @@ namespace WinMan.Windows
         {
             CheckAlive();
             InsertAfter(m_hwnd, new IntPtr(0));
+        }
+        public IWindow GetNextWindow()
+        {
+            return UseDefaults(() =>
+            {
+                IntPtr hwnd = m_hwnd;
+                while ((hwnd = GetWindow(hwnd, GW.HWndNext)) != IntPtr.Zero)
+                {
+                    IWindow window = m_workspace.UnsafeGetWindow(hwnd);
+                    if (window != null)
+                    {
+                        return window;
+                    }
+                }
+                return null;
+            }, null);
+        }
+
+        public IWindow GetPreviousWindow()
+        {
+            return UseDefaults(() =>
+            {
+                IntPtr hwnd = m_hwnd;
+                while ((hwnd = GetWindow(hwnd, GW.HWndPrev)) != IntPtr.Zero)
+                {
+                    IWindow window = m_workspace.UnsafeGetWindow(hwnd);
+                    if (window != null)
+                    {
+                        return window;
+                    }
+                }
+                return null;
+            }, null);
+        }
+
+        public Process GetProcess()
+        {
+            CheckAlive();
+            _ = GetWindowThreadProcessId(m_hwnd, out int processId);
+            return Process.GetProcessById(processId);
         }
 
         public override bool Equals(object obj)
@@ -681,13 +679,6 @@ namespace WinMan.Windows
             }
 
             return new Rectangle(rc.LEFT, rc.TOP, rc.RIGHT, rc.BOTTOM);
-        }
-
-        private Process GetProcess()
-        {
-            CheckAlive();
-            _ = GetWindowThreadProcessId(m_hwnd, out int processId);
-            return Process.GetProcessById(processId);
         }
 
         private void UpdateConfiguration()
