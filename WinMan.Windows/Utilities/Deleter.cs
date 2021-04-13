@@ -4,7 +4,7 @@ namespace WinMan.Windows.Utilities
 {
     internal class Deleter : IDisposable
     {
-        private Action disposeAction;
+        private Action? disposeAction;
 
         public Deleter(Action disposeAction)
         {

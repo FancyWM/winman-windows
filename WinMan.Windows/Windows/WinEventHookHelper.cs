@@ -18,7 +18,7 @@ namespace WinMan.Windows
             uint min = eventTypes.Min();
             uint max = eventTypes.Max();
 
-            WinEventProc callback = delegate (IntPtr hWinEventHook, uint eventType,
+            WinEventProc? callback = delegate (IntPtr hWinEventHook, uint eventType,
                 IntPtr hwnd, int idObject, int idChild, uint dwEventThread, uint dwmsEventTime)
             {
                 if (eventTypes.Contains(eventType))

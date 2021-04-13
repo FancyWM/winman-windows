@@ -13,7 +13,7 @@ namespace WinMan.Windows
         public IWorkspace Workspace { get; }
 
 #pragma warning disable
-        public event EventHandler<DesktopChangedEventArgs> Removed;
+        public event EventHandler<DesktopChangedEventArgs>? Removed;
 #pragma warning restore
 
         public DummyVirtualDesktop(IWorkspace workspace)

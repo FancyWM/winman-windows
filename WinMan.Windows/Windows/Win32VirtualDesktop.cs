@@ -9,7 +9,7 @@ namespace WinMan.Windows
         private readonly Win32Workspace m_workspace;
         private readonly Desktop m_desktop;
 
-        public event EventHandler<DesktopChangedEventArgs> Removed;
+        public event EventHandler<DesktopChangedEventArgs>? Removed;
 
         internal Win32VirtualDesktop(Win32Workspace workspace, Desktop desktop)
         {

@@ -3,6 +3,7 @@
 // Version for Windows 10 1809 and up
 // Compile with:
 // C:\Windows\Microsoft.NET\Framework\v4.0.30319\csc.exe VirtualDesktop.cs
+#nullable disable
 
 using System;
 using System.Runtime.InteropServices;
@@ -55,7 +56,7 @@ namespace WinMan.Windows.VirtualDesktop
 	}
 
 	[ComImport]
-	[InterfaceType(ComInterfaceType.InterfaceIsIInspectable)]
+	[InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
 	[Guid("372E1D3B-38D3-42E4-A15B-8AB2B178F513")]
 	internal interface IApplicationView
 	{

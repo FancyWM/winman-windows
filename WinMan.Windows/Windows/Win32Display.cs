@@ -10,13 +10,13 @@ namespace WinMan.Windows
         private static readonly bool IsPerMonitorDPISupported = Environment.OSVersion.Version.Major > 6
             || (Environment.OSVersion.Version.Major == 6 && Environment.OSVersion.Version.Minor >= 3);
 
-        public event EventHandler<DisplayChangedEventArgs> Removed;
+        public event EventHandler<DisplayChangedEventArgs>? Removed;
 
-        public event EventHandler<DisplayRectangleChangedEventArgs> WorkAreaChanged;
+        public event EventHandler<DisplayRectangleChangedEventArgs>? WorkAreaChanged;
 
-        public event EventHandler<DisplayRectangleChangedEventArgs> BoundsChanged;
+        public event EventHandler<DisplayRectangleChangedEventArgs>? BoundsChanged;
 
-        public event EventHandler<DisplayScalingChangedEventArgs> ScalingChanged;
+        public event EventHandler<DisplayScalingChangedEventArgs>? ScalingChanged;
 
         public Rectangle WorkArea
         {

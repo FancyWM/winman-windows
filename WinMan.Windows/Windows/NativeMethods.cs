@@ -654,7 +654,7 @@ namespace WinMan.Windows
            IntPtr lpParam);
 
         [DllImport("kernel32.dll", CharSet = CharSet.Auto, SetLastError = true)]
-        internal static extern IntPtr GetModuleHandle(string lpModuleName);
+        internal static extern IntPtr GetModuleHandle(string? lpModuleName);
 
         [Flags]
         internal enum SendMessageTimeoutFlags : uint
@@ -708,7 +708,7 @@ namespace WinMan.Windows
         internal delegate void TimerProc(IntPtr hWnd, uint uMsg, IntPtr nIDEvent, uint dwTime);
 
         [DllImport("user32.dll", SetLastError = true)]
-        internal static extern IntPtr SetTimer(IntPtr hWnd, IntPtr nIDEvent, uint uElapse, TimerProc lpTimerFunc);
+        internal static extern IntPtr SetTimer(IntPtr hWnd, IntPtr nIDEvent, uint uElapse, TimerProc? lpTimerFunc);
 
         [DllImport("user32.dll", SetLastError = true)]
         internal static extern bool KillTimer(IntPtr hWnd, IntPtr nIDEvent);

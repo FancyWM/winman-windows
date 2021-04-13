@@ -12,19 +12,19 @@ namespace WinMan.Windows
     [DebuggerDisplay("Handle = {Handle}, Title = {Title}")]
     public class Win32Window : IWindow
     {
-        public event EventHandler<WindowChangedEventArgs> Added;
-        public event EventHandler<WindowChangedEventArgs> Removed;
-        public event EventHandler<WindowChangedEventArgs> Destroyed;
+        public event EventHandler<WindowChangedEventArgs>? Added;
+        public event EventHandler<WindowChangedEventArgs>? Removed;
+        public event EventHandler<WindowChangedEventArgs>? Destroyed;
 
-        public event EventHandler<WindowFocusChangedEventArgs> GotFocus;
-        public event EventHandler<WindowFocusChangedEventArgs> LostFocus;
+        public event EventHandler<WindowFocusChangedEventArgs>? GotFocus;
+        public event EventHandler<WindowFocusChangedEventArgs>? LostFocus;
 
-        public event EventHandler<WindowPositionChangedEventArgs> PositionChangeStart;
-        public event EventHandler<WindowPositionChangedEventArgs> PositionChangeEnd;
-        public event EventHandler<WindowPositionChangedEventArgs> PositionChanged;
-        public event EventHandler<WindowStateChangedEventArgs> StateChanged;
-        public event EventHandler<WindowTopmostChangedEventArgs> TopmostChanged;
-        public event EventHandler<WindowTitleChangedEventArgs> TitleChanged;
+        public event EventHandler<WindowPositionChangedEventArgs>? PositionChangeStart;
+        public event EventHandler<WindowPositionChangedEventArgs>? PositionChangeEnd;
+        public event EventHandler<WindowPositionChangedEventArgs>? PositionChanged;
+        public event EventHandler<WindowStateChangedEventArgs>? StateChanged;
+        public event EventHandler<WindowTopmostChangedEventArgs>? TopmostChanged;
+        public event EventHandler<WindowTitleChangedEventArgs>? TitleChanged;
 
         public IntPtr Handle => m_hwnd;
 
@@ -90,9 +90,9 @@ namespace WinMan.Windows
 
         public bool CanClose => UseDefaults(() => ProbeAccess(), false);
 
-        public Point? MinSize => UseDefaults(() => GetMinMaxSize().minSize, default);
+        public Point? MinSize => UseDefaults(() => !CanResize ? Position.Size : GetMinMaxSize().minSize, default);
 
-        public Point? MaxSize => UseDefaults(() => GetMinMaxSize().maxSize, default);
+        public Point? MaxSize => UseDefaults(() => !CanResize ? Position.Size : GetMinMaxSize().maxSize, default);
 
         public bool IsAlive
         {
@@ -178,11 +178,10 @@ namespace WinMan.Windows
         public void SetPosition(Rectangle position)
         {
             var flags = SetWindowPosFlags.IgnoreZOrder | SetWindowPosFlags.AsynchronousWindowPosition | SetWindowPosFlags.DoNotActivate;
+            Rectangle currentPosition = Position;
             if (!CanResize)
             {
                 flags |= SetWindowPosFlags.IgnoreResize;
-
-                Rectangle currentPosition = Position;
                 position = Rectangle.OffsetAndSize(
                     position.Left,
                     position.Top,
@@ -303,14 +302,15 @@ namespace WinMan.Windows
             CheckAlive();
             InsertAfter(m_hwnd, new IntPtr(0));
         }
-        public IWindow GetNextWindow()
+
+        public IWindow? GetNextWindow()
         {
             return UseDefaults(() =>
             {
                 IntPtr hwnd = m_hwnd;
                 while ((hwnd = GetWindow(hwnd, GW.HWndNext)) != IntPtr.Zero)
                 {
-                    IWindow window = m_workspace.UnsafeGetWindow(hwnd);
+                    IWindow? window = m_workspace.UnsafeGetWindow(hwnd);
                     if (window != null)
                     {
                         return window;
@@ -320,14 +320,14 @@ namespace WinMan.Windows
             }, null);
         }
 
-        public IWindow GetPreviousWindow()
+        public IWindow? GetPreviousWindow()
         {
             return UseDefaults(() =>
             {
                 IntPtr hwnd = m_hwnd;
                 while ((hwnd = GetWindow(hwnd, GW.HWndPrev)) != IntPtr.Zero)
                 {
-                    IWindow window = m_workspace.UnsafeGetWindow(hwnd);
+                    IWindow? window = m_workspace.UnsafeGetWindow(hwnd);
                     if (window != null)
                     {
                         return window;

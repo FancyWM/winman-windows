@@ -11,10 +11,10 @@ namespace WinMan.Windows
     public class Win32DisplayManager : IDisplayManager
     {
         // TODO: Implements hotplug detection
-        public event EventHandler<DisplayChangedEventArgs> Added;
-        public event EventHandler<DisplayChangedEventArgs> Removed;
-        public event EventHandler<DisplayRectangleChangedEventArgs> VirtualDisplayBoundsChanged;
-        public event EventHandler<PrimaryDisplayChangedEventArgs> PrimaryDisplayChanged;
+        public event EventHandler<DisplayChangedEventArgs>? Added;
+        public event EventHandler<DisplayChangedEventArgs>? Removed;
+        public event EventHandler<DisplayRectangleChangedEventArgs>? VirtualDisplayBoundsChanged;
+        public event EventHandler<PrimaryDisplayChangedEventArgs>? PrimaryDisplayChanged;
 
         public Rectangle VirtualDisplayBounds
         {

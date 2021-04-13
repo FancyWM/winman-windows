@@ -39,9 +39,9 @@ namespace WinMan.Windows
             }
         }
 
-        public event EventHandler<DesktopChangedEventArgs> DesktopAdded;
-        public event EventHandler<DesktopChangedEventArgs> DesktopRemoved;
-        public event EventHandler<CurrentDesktopChangedEventArgs> CurrentDesktopChanged;
+        public event EventHandler<DesktopChangedEventArgs>? DesktopAdded;
+        public event EventHandler<DesktopChangedEventArgs>? DesktopRemoved;
+        public event EventHandler<CurrentDesktopChangedEventArgs>? CurrentDesktopChanged;
 
         public Win32VirtualDesktopManager(Win32Workspace workspace)
         {
@@ -197,7 +197,7 @@ namespace WinMan.Windows
             int newCurrentDesktop = Desktop.FromDesktop(Desktop.Current);
             int oldCurrentDesktop;
             IVirtualDesktop newDesktop;
-            IVirtualDesktop oldDesktop;
+            IVirtualDesktop? oldDesktop;
 
             lock (m_syncRoot)
             {

@@ -13,9 +13,9 @@ namespace WinMan.Windows
     {
         public IntPtr Handle { get; }
 
-        public Win32Window WindowObject => m_windowObject;
+        public Win32Window? WindowObject => m_windowObject;
 
-        private Win32Window m_windowObject;
+        private Win32Window? m_windowObject;
 
         public Win32WindowHandle(IntPtr handle)
         {
