@@ -511,10 +511,11 @@ namespace WinMan.Windows
 
         private Rectangle GetFrameMargins()
         {
-            if (DwmGetWindowAttribute(m_hwnd, DWMWINDOWATTRIBUTE.ExtendedFrameBounds, out RECT frame, Marshal.SizeOf<RECT>()) != 0)
+            int hr = DwmGetWindowAttribute(m_hwnd, DWMWINDOWATTRIBUTE.ExtendedFrameBounds, out RECT frame, Marshal.SizeOf<RECT>());
+            if (hr != 0)
             {
                 CheckAlive();
-                throw new Win32Exception();
+                throw new Win32Exception(hr);
             }
 
             var rect = GetWindowRectSafe();
