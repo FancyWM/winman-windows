@@ -15,6 +15,7 @@ namespace WinMan.Windows
     public class Win32Workspace : IWorkspace
     {
         public event EventHandler<CursorLocationChangedEventArgs>? CursorLocationChanged;
+        public event EventHandler<FocusedWindowChangedEventArgs>? FocusedWindowChanged;
         public event EventHandler<WindowChangedEventArgs>? WindowAdded;
         public event EventHandler<WindowChangedEventArgs>? WindowRemoved;
         public event EventHandler<WindowChangedEventArgs>? WindowDestroyed;
@@ -653,12 +654,27 @@ namespace WinMan.Windows
             {
                 if (m_windowSet.TryGetValue(hwnd, out var window) && window.WindowObject != null)
                 {
+                    var oldFocusedHwnd = m_hwndFocused;
                     m_hwndFocused = hwnd;
-                    window.WindowObject?.OnForeground();
+                    window.WindowObject.OnForeground();
+
+                    if (oldFocusedHwnd == IntPtr.Zero)
+                    {
+                        FocusedWindowChanged?.Invoke(this, new FocusedWindowChangedEventArgs(window.WindowObject, null));
+                    }
+                    else if (m_windowSet.TryGetValue(oldFocusedHwnd, out var oldWindow) && oldWindow.WindowObject != null) 
+                    {
+                        FocusedWindowChanged?.Invoke(this, new FocusedWindowChangedEventArgs(window.WindowObject, oldWindow.WindowObject));
+                    }
                 }
                 else
                 {
+                    var oldFocusedHwnd = m_hwndFocused;
                     m_hwndFocused = IntPtr.Zero;
+                    if (m_windowSet.TryGetValue(oldFocusedHwnd, out var oldWindow) && oldWindow.WindowObject != null)
+                    {
+                        FocusedWindowChanged?.Invoke(this, new FocusedWindowChangedEventArgs(null, oldWindow.WindowObject));
+                    }
                 }
             }
         }
