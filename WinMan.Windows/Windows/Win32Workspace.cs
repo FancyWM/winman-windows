@@ -281,9 +281,9 @@ namespace WinMan.Windows
             m_isShuttingDown = true;
             m_winEventHook?.Dispose();
 
-            m_eventLoopThread?.Join();
+            m_eventLoopThread?.Join(1000);
             m_processingLoop.Shutdown();
-            m_processingThread?.Join();
+            m_processingThread?.Join(1000);
         }
 
         internal IWindow? UnsafeGetWindow(IntPtr hwnd)
@@ -317,7 +317,7 @@ namespace WinMan.Windows
             }
             else if (UnhandledException != null)
             {
-                UnhandledException(this, new UnhandledExceptionEventArgs(e, false));
+                UnhandledException(this, new UnhandledExceptionEventArgs(ex, false));
                 return;
             }
             else
