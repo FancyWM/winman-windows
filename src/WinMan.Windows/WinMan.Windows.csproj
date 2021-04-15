@@ -11,7 +11,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\WinMan\WinMan\WinMan.csproj" />
+    <ProjectReference Include="..\..\..\WinMan\src\WinMan\WinMan.csproj" />
   </ItemGroup>
 
 </Project>
