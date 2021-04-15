@@ -1,0 +1,179 @@
+{
+  "homepages": [],
+  "source_base_path": "Z:/Development/source/repos/WinManRoot/WinMan.Windows/src/WinMan.Windows",
+  "xrefmap": "xrefmap.yml",
+  "files": [
+    {
+      "type": "Resource",
+      "output": {
+        "resource": {
+          "relative_path": "index.json"
+        }
+      },
+      "is_incremental": false
+    },
+    {
+      "type": "ManagedReference",
+      "source_relative_path": "../../obj/docfx/WinMan.Windows.DummyVirtualDesktop.yml",
+      "output": {
+        ".html": {
+          "relative_path": "WinMan.Windows.DummyVirtualDesktop.html",
+          "hash": "rXps2Izi5DeMpjb3B7bZq0OlYgNSVDadtz9/wUAGHFY="
+        }
+      },
+      "is_incremental": false,
+      "version": ""
+    },
+    {
+      "type": "ManagedReference",
+      "source_relative_path": "../../obj/docfx/WinMan.Windows.DummyVirtualDesktopManager.yml",
+      "output": {
+        ".html": {
+          "relative_path": "WinMan.Windows.DummyVirtualDesktopManager.html",
+          "hash": "39YDYbwe1qcopeLy3YSD5My/eHjFQm5rFJy6wuYhbC4="
+        }
+      },
+      "is_incremental": false,
+      "version": ""
+    },
+    {
+      "type": "ManagedReference",
+      "source_relative_path": "../../obj/docfx/WinMan.Windows.Win32Display.yml",
+      "output": {
+        ".html": {
+          "relative_path": "WinMan.Windows.Win32Display.html",
+          "hash": "I00nKq10lKV5sWNSb75LvcnPjTiDI39bx8SYzXE9FVM="
+        }
+      },
+      "is_incremental": false,
+      "version": ""
+    },
+    {
+      "type": "ManagedReference",
+      "source_relative_path": "../../obj/docfx/WinMan.Windows.Win32DisplayManager.yml",
+      "output": {
+        ".html": {
+          "relative_path": "WinMan.Windows.Win32DisplayManager.html",
+          "hash": "TS6kuuXQT33z/wryn+yq9GMg5R1syY3ZQOja5JasQ0U="
+        }
+      },
+      "is_incremental": false,
+      "version": ""
+    },
+    {
+      "type": "ManagedReference",
+      "source_relative_path": "../../obj/docfx/WinMan.Windows.Win32VirtualDesktop.yml",
+      "output": {
+        ".html": {
+          "relative_path": "WinMan.Windows.Win32VirtualDesktop.html",
+          "hash": "GGAwFCzA90be4Y2JNw2ZDvvXLUH8868p7QqEgyuNZ+c="
+        }
+      },
+      "is_incremental": false,
+      "version": ""
+    },
+    {
+      "type": "ManagedReference",
+      "source_relative_path": "../../obj/docfx/WinMan.Windows.Win32VirtualDesktopManager.yml",
+      "output": {
+        ".html": {
+          "relative_path": "WinMan.Windows.Win32VirtualDesktopManager.html",
+          "hash": "3/Ks3J2ZR0+WPVdenl6Pqk80GU7agIciwi89rb+QzKc="
+        }
+      },
+      "is_incremental": false,
+      "version": ""
+    },
+    {
+      "type": "ManagedReference",
+      "source_relative_path": "../../obj/docfx/WinMan.Windows.Win32Window.yml",
+      "output": {
+        ".html": {
+          "relative_path": "WinMan.Windows.Win32Window.html",
+          "hash": "fC8urGBWx4+Tq9es0UfKp1DlPBDHMNvH0Zpvk/BWzUY="
+        }
+      },
+      "is_incremental": false,
+      "version": ""
+    },
+    {
+      "type": "ManagedReference",
+      "source_relative_path": "../../obj/docfx/WinMan.Windows.Win32Workspace.yml",
+      "output": {
+        ".html": {
+          "relative_path": "WinMan.Windows.Win32Workspace.html",
+          "hash": "I5jC1EI/efYY14WV5p3shyROvCe2dNzlELDWhzGj7lY="
+        }
+      },
+      "is_incremental": false,
+      "version": ""
+    },
+    {
+      "type": "ManagedReference",
+      "source_relative_path": "../../obj/docfx/WinMan.Windows.yml",
+      "output": {
+        ".html": {
+          "relative_path": "WinMan.Windows.html",
+          "hash": "XVS/Efe7gJ48vwCjZ7wlsmSEXQGZFcnzoP7MK2ogpaA="
+        }
+      },
+      "is_incremental": false,
+      "version": ""
+    },
+    {
+      "type": "Toc",
+      "source_relative_path": "../../obj/docfx/toc.yml",
+      "output": {
+        ".html": {
+          "relative_path": "toc.html",
+          "hash": "ZKtgAP3rpEHBGhYVHIiVNey6wTPW6wi7kO0CCap5VPk="
+        }
+      },
+      "is_incremental": false,
+      "version": ""
+    }
+  ],
+  "incremental_info": [
+    {
+      "status": {
+        "can_incremental": false,
+        "details": "Disable incremental build by force rebuild option.",
+        "incrementalPhase": "build",
+        "total_file_count": 0,
+        "skipped_file_count": 0,
+        "full_build_reason_code": "ForceRebuild"
+      },
+      "processors": {
+        "ManagedReferenceDocumentProcessor": {
+          "can_incremental": false,
+          "incrementalPhase": "build",
+          "total_file_count": 9,
+          "skipped_file_count": 0
+        },
+        "TocDocumentProcessor": {
+          "can_incremental": false,
+          "details": "Processor TocDocumentProcessor cannot support incremental build because the processor doesn't implement ISupportIncrementalDocumentProcessor interface.",
+          "incrementalPhase": "build",
+          "total_file_count": 0,
+          "skipped_file_count": 0
+        }
+      }
+    },
+    {
+      "status": {
+        "can_incremental": false,
+        "details": "Cannot support incremental post processing, the reason is: should not trace intermediate info.",
+        "incrementalPhase": "postProcessing",
+        "total_file_count": 0,
+        "skipped_file_count": 0
+      },
+      "processors": {}
+    }
+  ],
+  "version_info": {},
+  "groups": [
+    {
+      "xrefmap": "xrefmap.yml"
+    }
+  ]
+}
