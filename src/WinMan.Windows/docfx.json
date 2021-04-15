@@ -25,9 +25,16 @@
         "_gitContribute": {
           "repo": "https://github.com/veselink1/winman-windows",
           "branch": "master"
-        }
+        },
+        "_enableSearch": "true"
       },
-      "dest": "../../docs",
-      "template": "default"
+      "template": [
+        "default",
+        "../../docfx/templates/material/material"
+      ],
+      "postProcessors": [
+        "ExtractSearchIndex"
+      ],
+      "dest": "../../docs"
     }
   }
