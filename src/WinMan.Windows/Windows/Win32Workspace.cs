@@ -53,7 +53,7 @@ namespace WinMan.Windows
         private Stopwatch m_stopwatch = new Stopwatch();
         private List<(long timestamp, Win32WindowHandle handle)> m_recentWindowList = new List<(long timestamp, Win32WindowHandle handle)>();
         private IntPtr m_hwndFocused = IntPtr.Zero;
-        private Point m_cursorLocation;
+        private readonly Atomic<Point> m_cursorLocation = new Atomic<Point>();
 
         private IVirtualDesktopManager? m_virtualDesktops = null;
 
@@ -121,17 +121,7 @@ namespace WinMan.Windows
             }
         }
 
-        public Point CursorLocation
-        {
-            get
-            {
-                if (!GetCursorPos(out POINT pt))
-                {
-                    throw new Win32Exception();
-                }
-                return new Point(pt.X, pt.Y);
-            }
-        }
+        public Point CursorLocation => m_cursorLocation.Read();
 
         public TimeSpan WatchInterval
         {
@@ -163,7 +153,14 @@ namespace WinMan.Windows
                     throw new InvalidOperationException("Workspace has already been Open()ed!");
                 }
 
-                m_cursorLocation = CursorLocation;
+                try
+                {
+                    m_cursorLocation.Exchange(GetCursorLocation());
+                }
+                catch (Win32Exception)
+                {
+                    m_cursorLocation.Exchange(new Point());
+                }
 
                 m_displayManager = new Win32DisplayManager(this);
 
@@ -533,12 +530,18 @@ namespace WinMan.Windows
 
         private void OnCursorLocationChanged()
         {
-            var newLocation = CursorLocation;
-            if (m_cursorLocation != newLocation)
+            try
             {
-                var oldLocation = m_cursorLocation;
-                m_cursorLocation = newLocation;
-                CursorLocationChanged?.Invoke(this, new CursorLocationChangedEventArgs(this, newLocation, oldLocation));
+                var newLocation = GetCursorLocation();
+                var oldLocation = m_cursorLocation.Exchange(newLocation);
+                if (oldLocation != newLocation)
+                {
+                    CursorLocationChanged?.Invoke(this, new CursorLocationChangedEventArgs(this, newLocation, oldLocation));
+                }
+            }
+            catch (Win32Exception e) when (e.Message == "Access is denied.")
+            {
+                // Ignore access denied
             }
         }
 
@@ -687,6 +690,15 @@ namespace WinMan.Windows
                 return true;
             }
             return false;
+        }
+
+        private Point GetCursorLocation()
+        {
+            if (!GetCursorPos(out POINT pt))
+            {
+                throw new Win32Exception();
+            }
+            return new Point(pt.X, pt.Y);
         }
 
         private void CheckVisibilityChanges()
