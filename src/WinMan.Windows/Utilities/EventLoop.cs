@@ -12,7 +12,14 @@ namespace WinMan.Windows.Utilities
 
         public void InvokeAsync(Action action)
         {
-            m_actions.Add(action);
+            try
+            {
+                m_actions.Add(action);
+            }
+            catch (InvalidOperationException) when (m_actions.IsAddingCompleted)
+            {
+                return;
+            }
         }
 
         public void Run()
