@@ -8,6 +8,7 @@ using System.Threading;
 
 using WinMan.Windows.Utilities;
 
+using static WinMan.Windows.Constants;
 using static WinMan.Windows.NativeMethods;
 
 namespace WinMan.Windows
@@ -29,11 +30,11 @@ namespace WinMan.Windows
         /// <summary>
         /// Timer to watch the whole environment for changes that are not detected as events.
         /// </summary>
-        private static readonly IntPtr IdtTimerWatch = new IntPtr(1);
+        private static readonly nuint IdtTimerWatch = 1;
         /// <summary>
         /// Timer to actively watch recently created windows.
         /// </summary>
-        private static readonly IntPtr IdtRecentTimerWatch = new IntPtr(2);
+        private static readonly nuint IdtRecentTimerWatch = 2;
 
         private readonly object m_initSyncRoot = new object();
 
@@ -42,8 +43,8 @@ namespace WinMan.Windows
         private Thread? m_processingThread;
         private EventLoop m_processingLoop = new EventLoop();
         private Deleter? m_winEventHook;
-        private IntPtr m_hTimer;
-        private IntPtr m_hTimerRecent;
+        private UIntPtr m_hTimer;
+        private UIntPtr m_hTimerRecent;
         private bool m_isShuttingDown = false;
         private TimeSpan m_watchInterval = TimeSpan.FromMilliseconds(200);
 
@@ -230,11 +231,11 @@ namespace WinMan.Windows
             Dictionary<IntPtr, int> hwndToZOrder = new Dictionary<IntPtr, int>();
 
             int index = 0;
-            bool success = EnumWindows(delegate (IntPtr hwnd, IntPtr _)
+            bool success = EnumWindows(delegate (HWND hwnd, LPARAM _)
             {
                 hwndToZOrder[hwnd] = index++;
                 return true;
-            }, IntPtr.Zero);
+            }, new LPARAM());
 
             return Comparer<IWindow>.Create((x, y) =>
             {
@@ -273,8 +274,8 @@ namespace WinMan.Windows
 
         public void Dispose()
         {
-            KillTimer(IntPtr.Zero, m_hTimer);
-            KillTimer(IntPtr.Zero, m_hTimerRecent);
+            KillTimer(new HWND(), m_hTimer);
+            KillTimer(new HWND(), m_hTimerRecent);
             m_isShuttingDown = true;
             m_winEventHook?.Dispose();
 
@@ -325,16 +326,23 @@ namespace WinMan.Windows
 
         private void GetMessageLoop()
         {
-            m_msgWnd = CreateWindowEx(
-                ExtendedWindowStyles.WS_EX_NOACTIVATE,
-                "STATIC",
-                "WinManMessageReceiver",
-                WindowStyles.WS_DISABLED,
-                0, 0, 0, 0,
-                IntPtr.Zero,
-                IntPtr.Zero,
-                GetModuleHandle(null),
-                IntPtr.Zero);
+            unsafe
+            {
+                fixed (char* lpClassName = "STATIC".ToCharArray(), 
+                    lpWindowName = "WinManMessageReceiver".ToCharArray()) 
+                {
+                    m_msgWnd = CreateWindowEx(
+                        WINDOWS_EX_STYLE.WS_EX_NOACTIVATE,
+                        new(lpClassName),
+                        new(lpWindowName),
+                        WINDOWS_STYLE.WS_DISABLED,
+                        0, 0, 0, 0,
+                        new(),
+                        new(),
+                        new HINSTANCE(GetModuleHandle(new PCWSTR())),
+                        null);
+                }
+            }
 
             // WndHooks.InstallWindowMessageHook(m_msgWnd, (int)(WM_USER + 100), WndHooks.HookID.WH_CALLWNDPROC, 0, 0);
 
@@ -354,14 +362,14 @@ namespace WinMan.Windows
                 EVENT_OBJECT_NAMECHANGE,
             }, OnWinEvent);
 
-            m_hTimer = SetTimer(m_msgWnd, IdtTimerWatch, (uint)m_watchInterval.TotalMilliseconds, null);
-            m_hTimerRecent = SetTimer(m_msgWnd, IdtRecentTimerWatch, 10, null);
-            if (m_hTimer == IntPtr.Zero || m_hTimerRecent == IntPtr.Zero)
+            m_hTimer = SetTimer(new(m_msgWnd), IdtTimerWatch, (uint)m_watchInterval.TotalMilliseconds, null);
+            m_hTimerRecent = SetTimer(new(m_msgWnd), IdtRecentTimerWatch, 10, null);
+            if (m_hTimer == UIntPtr.Zero || m_hTimerRecent == UIntPtr.Zero)
             {
                 throw new Win32Exception();
             }
 
-            while (!m_isShuttingDown && GetMessage(out MSG msg, m_msgWnd, 0, 0) > 0)
+            while (!m_isShuttingDown && GetMessage(out MSG msg, new(m_msgWnd), 0, 0))
             {
                 WndProc(m_msgWnd, msg.message, msg.wParam, msg.lParam);
             }
@@ -374,11 +382,11 @@ namespace WinMan.Windows
                 switch (msg)
                 {
                     case WM_TIMER:
-                        if ((IntPtr)(long)wParam == IdtTimerWatch)
+                        if (wParam == IdtTimerWatch)
                         {
                             m_processingLoop.InvokeAsync(OnTimerWatch);
                         }
-                        else if ((IntPtr)(long)wParam == IdtRecentTimerWatch)
+                        else if (wParam == IdtRecentTimerWatch)
                         {
                             m_processingLoop.InvokeAsync(OnRecentTimerWatch);
                         }
@@ -386,7 +394,7 @@ namespace WinMan.Windows
                     case WM_DISPLAYCHANGE:
                         m_processingLoop.InvokeAsync(OnDisplayChange);
                         break;
-                    case WM_SETTINGCHANGE:
+                    case WM_WININICHANGE:
                         m_processingLoop.InvokeAsync(OnSettingChange);
                         break;
                 }
@@ -418,7 +426,7 @@ namespace WinMan.Windows
         private void OnTimerWatch()
         {
             // Dirty checking is still needed, as some things do not have corresponding events. 
-            // For example, virtual desktop addition/removal or windows changing their windowstyles at runtime
+            // For example, virtual desktop addition/removal or windows changing their WINDOWS_STYLE at runtime
             // cannot be observed directly.
             RefreshConfiguration();
         }
@@ -465,7 +473,7 @@ namespace WinMan.Windows
                 return;
             }
 
-                Win32WindowHandle window;
+            Win32WindowHandle window;
 
             switch (eventType)
             {
@@ -698,7 +706,7 @@ namespace WinMan.Windows
             {
                 throw new Win32Exception();
             }
-            return new Point(pt.X, pt.Y);
+            return new Point(pt.x, pt.y);
         }
 
         private void CheckVisibilityChanges()
@@ -783,7 +791,7 @@ namespace WinMan.Windows
         {
             List<Win32WindowHandle> windows = new List<Win32WindowHandle>();
 
-            bool success = EnumWindows(delegate (IntPtr hwnd, IntPtr _)
+            bool success = EnumWindows(delegate (HWND hwnd, LPARAM _)
             {
                 try
                 {
@@ -794,7 +802,7 @@ namespace WinMan.Windows
                     // ignore
                 }
                 return true; // Continue
-            }, IntPtr.Zero);
+            }, new LPARAM());
 
             if (!success)
             {

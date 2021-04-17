@@ -76,15 +76,15 @@ namespace WinMan.Windows
 
         public bool IsFocused => UseDefaults(() => m_isFocused, false);
 
-        public bool CanResize => UseDefaults(() => GetWindowStyles(m_hwnd).HasFlag(WindowStyles.WS_SIZEFRAME) && ProbeAccess(), false);
+        public bool CanResize => UseDefaults(() => GetWINDOWS_STYLE(m_hwnd).HasFlag(WINDOWS_STYLE.WS_SIZEBOX) && ProbeAccess(), false);
 
         public bool CanMove => UseDefaults(() => State == WindowState.Restored && ProbeAccess(), false);
 
         public bool CanReorder => UseDefaults(() => ProbeAccess(), false);
 
-        public bool CanMinimize => UseDefaults(() => GetWindowStyles(m_hwnd).HasFlag(WindowStyles.WS_MINIMIZEBOX) && ProbeAccess(), false);
+        public bool CanMinimize => UseDefaults(() => GetWINDOWS_STYLE(m_hwnd).HasFlag(WINDOWS_STYLE.WS_MINIMIZEBOX) && ProbeAccess(), false);
 
-        public bool CanMaximize => UseDefaults(() => GetWindowStyles(m_hwnd).HasFlag(WindowStyles.WS_MAXIMIZEBOX) && ProbeAccess(), false);
+        public bool CanMaximize => UseDefaults(() => GetWINDOWS_STYLE(m_hwnd).HasFlag(WINDOWS_STYLE.WS_MAXIMIZEBOX) && ProbeAccess(), false);
 
         public bool CanCreateLiveThumbnail => true;
 
@@ -103,7 +103,7 @@ namespace WinMan.Windows
                     return false;
                 }
 
-                m_isDead = !IsWindow(m_hwnd);
+                m_isDead = !IsWindow(new(m_hwnd));
                 return !m_isDead;
             }
         }
@@ -168,7 +168,7 @@ namespace WinMan.Windows
 
         public void Close()
         {
-            if (!CloseWindow(m_hwnd))
+            if (!CloseWindow(new(m_hwnd)))
             {
                 CheckAlive();
                 throw new Win32Exception();
@@ -177,11 +177,11 @@ namespace WinMan.Windows
 
         public void SetPosition(Rectangle position)
         {
-            var flags = SetWindowPosFlags.IgnoreZOrder | SetWindowPosFlags.AsynchronousWindowPosition | SetWindowPosFlags.DoNotActivate;
+            var flags = SetWindowPos_uFlags.SWP_NOZORDER | SetWindowPos_uFlags.SWP_ASYNCWINDOWPOS | SetWindowPos_uFlags.SWP_NOACTIVATE;
             Rectangle currentPosition = Position;
             if (!CanResize)
             {
-                flags |= SetWindowPosFlags.IgnoreResize;
+                flags |= SetWindowPos_uFlags.SWP_NOSIZE;
                 position = Rectangle.OffsetAndSize(
                     position.Left,
                     position.Top,
@@ -191,10 +191,10 @@ namespace WinMan.Windows
             }
             if (!CanMove)
             {
-                flags |= SetWindowPosFlags.IgnoreMove;
+                flags |= SetWindowPos_uFlags.SWP_NOMOVE;
             }
 
-            if (!SetWindowPos(m_hwnd, IntPtr.Zero, position.Left, position.Top, position.Width, position.Height, flags))
+            if (!SetWindowPos(new(m_hwnd), new(), position.Left, position.Top, position.Width, position.Height, flags))
             {
                 CheckAlive();
             }
@@ -210,7 +210,7 @@ namespace WinMan.Windows
 
             try
             {
-                SW sw;
+                SHOW_WINDOW_CMD sw;
                 switch (state)
                 {
                     case WindowState.Minimized:
@@ -218,23 +218,23 @@ namespace WinMan.Windows
                         {
                             throw new InvalidOperationException("The window does not support minimization");
                         }
-                        sw = SW.Minimize;
+                        sw = SHOW_WINDOW_CMD.SW_MINIMIZE;
                         break;
                     case WindowState.Maximized:
                         if (!CanMaximize)
                         {
                             throw new InvalidOperationException("The window does not support maximization");
                         }
-                        sw = SW.Maximize;
+                        sw = SHOW_WINDOW_CMD.SW_MAXIMIZE;
                         break;
                     case WindowState.Restored:
-                        sw = SW.Normal;
+                        sw = SHOW_WINDOW_CMD.SW_NORMAL;
                         break;
                     default:
                         throw new InvalidProgramException();
                 }
 
-                if (!ShowWindow(m_hwnd, sw))
+                if (!ShowWindow(new(m_hwnd), sw))
                 {
                     CheckAlive();
                     throw new Win32Exception();
@@ -273,7 +273,7 @@ namespace WinMan.Windows
 
             try
             {
-                if (!SetForegroundWindow(m_hwnd))
+                if (!SetForegroundWindow(new HWND(m_hwnd)))
                 {
                     throw new Win32Exception();
                 }
@@ -308,7 +308,7 @@ namespace WinMan.Windows
             return UseDefaults(() =>
             {
                 IntPtr hwnd = m_hwnd;
-                while ((hwnd = GetWindow(hwnd, GW.HWndNext)) != IntPtr.Zero)
+                while ((hwnd = GetWindow(new(hwnd), GetWindow_uCmdFlags.GW_HWNDNEXT)) != IntPtr.Zero)
                 {
                     IWindow? window = m_workspace.UnsafeGetWindow(hwnd);
                     if (window != null)
@@ -325,7 +325,7 @@ namespace WinMan.Windows
             return UseDefaults(() =>
             {
                 IntPtr hwnd = m_hwnd;
-                while ((hwnd = GetWindow(hwnd, GW.HWndPrev)) != IntPtr.Zero)
+                while ((hwnd = GetWindow(new(hwnd), GetWindow_uCmdFlags.GW_HWNDPREV)) != IntPtr.Zero)
                 {
                     IWindow? window = m_workspace.UnsafeGetWindow(hwnd);
                     if (window != null)
@@ -340,8 +340,12 @@ namespace WinMan.Windows
         public Process GetProcess()
         {
             CheckAlive();
-            _ = GetWindowThreadProcessId(m_hwnd, out int processId);
-            return Process.GetProcessById(processId);
+            uint processId = 0;
+            unsafe
+            {
+                _ = GetWindowThreadProcessId(new(m_hwnd), &processId);
+            }
+            return Process.GetProcessById((int)processId);
         }
 
         public override bool Equals(object obj)
@@ -497,40 +501,56 @@ namespace WinMan.Windows
 
         private string GetTitle(bool throwOnError)
         {
-            StringBuilder sb = new StringBuilder(128);
-            if (IntPtr.Zero == SendMessageTimeoutText(m_hwnd, WM_GETTEXT, new IntPtr(sb.Capacity), sb, SendMessageTimeoutFlags.SMTO_NORMAL | SendMessageTimeoutFlags.SMTO_ABORTIFHUNG, 3000, out _))
+            unsafe
             {
-                if (throwOnError)
+                char[] buffer = new char[256];
+                fixed (char* pBuffer = buffer)
                 {
-                    CheckAlive();
+                    var flags = SendMessageTimeout_fuFlags.SMTO_NORMAL | SendMessageTimeout_fuFlags.SMTO_ABORTIFHUNG;
+                    nuint result = 0;
+                    if (new LRESULT() == SendMessageTimeout(new(m_hwnd), Constants.WM_GETTEXT, new((nuint)buffer.Length), new LPARAM((nint)pBuffer), flags, 3000, &result))
+                    {
+                        if (throwOnError)
+                        {
+                            CheckAlive();
+                        }
+                        return InvalidHandleTitle;
+                    }
+                    return new string(pBuffer);
                 }
-                return InvalidHandleTitle;
             }
-            return sb.ToString();
         }
 
         private Rectangle GetFrameMargins()
         {
-            int hr = DwmGetWindowAttribute(m_hwnd, DWMWINDOWATTRIBUTE.ExtendedFrameBounds, out RECT frame, Marshal.SizeOf<RECT>());
-            if (hr != 0)
+            RECT frame;
+            unsafe
             {
-                CheckAlive();
-                throw new Win32Exception(hr);
+                int hr = DwmGetWindowAttribute(new(m_hwnd), (uint)DWMWINDOWATTRIBUTE.DWMWA_EXTENDED_FRAME_BOUNDS, &frame, (uint)sizeof(RECT));
+                if (hr != 0)
+                {
+                    CheckAlive();
+                    throw new Win32Exception(hr);
+                }
             }
 
             var rect = GetWindowRectSafe();
 
             return new Rectangle(
-                left: frame.LEFT - rect.Left,
-                top: frame.TOP - rect.Top,
-                right: rect.Right - frame.RIGHT,
-                bottom: rect.Bottom - frame.BOTTOM);
+                left: frame.left - rect.Left,
+                top: frame.top - rect.Top,
+                right: rect.Right - frame.right,
+                bottom: rect.Bottom - frame.bottom);
         }
 
         private bool ProbeAccess()
         {
-            _ = GetWindowThreadProcessId(m_hwnd, out int processId);
-            IntPtr hProcess = OpenProcess(PROCESS_QUERY_INFORMATION, false, processId);
+            uint processId = 0;
+            unsafe
+            {
+                _ = GetWindowThreadProcessId(new(m_hwnd), &processId);
+            }
+            var hProcess = OpenProcess(PROCESS_ACCESS_RIGHTS.PROCESS_QUERY_INFORMATION, false, processId);
             if (hProcess == IntPtr.Zero)
             {
                 return false;
@@ -541,8 +561,8 @@ namespace WinMan.Windows
 
         private void InsertAfter(IntPtr hwnd, IntPtr hwndAfter)
         {
-            var flags = SetWindowPosFlags.IgnoreMove | SetWindowPosFlags.IgnoreResize | SetWindowPosFlags.AsynchronousWindowPosition | SetWindowPosFlags.DoNotActivate;
-            if (!SetWindowPos(hwnd, hwndAfter, 0, 0, 0, 0, flags))
+            var flags = SetWindowPos_uFlags.SWP_NOMOVE | SetWindowPos_uFlags.SWP_NOSIZE | SetWindowPos_uFlags.SWP_ASYNCWINDOWPOS | SetWindowPos_uFlags.SWP_NOACTIVATE;
+            if (!SetWindowPos(new(hwnd), new(hwndAfter), 0, 0, 0, 0, flags))
             {
                 CheckAlive();
                 throw new Win32Exception();
@@ -553,25 +573,25 @@ namespace WinMan.Windows
         {
             try
             {
-                if (!IsWindowVisible(hwnd))
+                if (!IsWindowVisible(new(hwnd)))
                 {
                     return false;
                 }
 
-                if (hwnd != GetAncestor(hwnd, GA.GetRoot))
+                if (hwnd != GetAncestor(new(hwnd), GetAncestor_gaFlags.GA_ROOT))
                 {
                     return false;
                 }
 
-                WindowStyles style = GetWindowStyles(hwnd);
-                if (style.HasFlag(WindowStyles.WS_CHILD))
+                WINDOWS_STYLE style = GetWINDOWS_STYLE(hwnd);
+                if (style.HasFlag(WINDOWS_STYLE.WS_CHILD))
                 {
                     return false;
                 }
 
-                ExtendedWindowStyles exStyle = GetExtendedWindowStyles(hwnd);
+                WINDOWS_EX_STYLE exStyle = GetWINDOWS_EX_STYLE(hwnd);
 
-                bool isToolWindow = exStyle.HasFlag(ExtendedWindowStyles.WS_EX_TOOLWINDOW);
+                bool isToolWindow = exStyle.HasFlag(WINDOWS_EX_STYLE.WS_EX_TOOLWINDOW);
                 if (isToolWindow)
                 {
                     return false;
@@ -579,10 +599,10 @@ namespace WinMan.Windows
 
                 bool CheckCloaked()
                 {
-                    uint cloaked = GetDwordDwmWindowAttribute(hwnd, DWMWINDOWATTRIBUTE.Cloaked);
+                    uint cloaked = GetDwordDwmWindowAttribute(hwnd, DWMWINDOWATTRIBUTE.DWMWA_CLOAKED);
                     if (cloaked > 0)
                     {
-                        if (cloaked == DWM_CLOAKED_SHELL && workspace.VirtualDesktopManager is Win32VirtualDesktopManager vdm)
+                        if (cloaked == Constants.DWM_CLOAKED_SHELL && workspace.VirtualDesktopManager is Win32VirtualDesktopManager vdm)
                         {
                             return vdm.IsNotOnCurrentDesktop(hwnd);
                         }
@@ -594,24 +614,24 @@ namespace WinMan.Windows
                     return true;
                 }
 
-                bool isAppWindow = exStyle.HasFlag(ExtendedWindowStyles.WS_EX_APPWINDOW);
+                bool isAppWindow = exStyle.HasFlag(WINDOWS_EX_STYLE.WS_EX_APPWINDOW);
                 if (isAppWindow)
                 {
-                    return CheckCloaked() && GetWindowTextLength(hwnd) != 0;
+                    return CheckCloaked() && GetWindowTextLength(new(hwnd)) != 0;
                 }
 
-                bool hasEdge = exStyle.HasFlag(ExtendedWindowStyles.WS_EX_WINDOWEDGE);
-                bool isTopmostOnly = exStyle == ExtendedWindowStyles.WS_EX_TOPMOST;
+                bool hasEdge = exStyle.HasFlag(WINDOWS_EX_STYLE.WS_EX_WINDOWEDGE);
+                bool isTopmostOnly = exStyle == WINDOWS_EX_STYLE.WS_EX_TOPMOST;
 
                 if (hasEdge || isTopmostOnly || exStyle == 0)
                 {
-                    return CheckCloaked() && GetWindowTextLength(hwnd) != 0;
+                    return CheckCloaked() && GetWindowTextLength(new(hwnd)) != 0;
                 }
 
-                bool isAcceptFiles = exStyle.HasFlag(ExtendedWindowStyles.WS_EX_ACCEPTFILES);
+                bool isAcceptFiles = exStyle.HasFlag(WINDOWS_EX_STYLE.WS_EX_ACCEPTFILES);
                 if (isAcceptFiles /* && ShowStyle == ShowMaximized */)
                 {
-                    return CheckCloaked() && GetWindowTextLength(hwnd) != 0;
+                    return CheckCloaked() && GetWindowTextLength(new(hwnd)) != 0;
                 }
 
                 return false;
@@ -630,25 +650,27 @@ namespace WinMan.Windows
         internal static uint GetDwordDwmWindowAttribute(IntPtr hwnd, DWMWINDOWATTRIBUTE attr)
         {
             uint value;
-            int cbSize = Marshal.SizeOf(typeof(uint));
-            DwmGetWindowAttribute(hwnd, attr, out value, cbSize);
+            unsafe
+            {
+                DwmGetWindowAttribute(new(hwnd), (uint)attr, &value, sizeof(uint));
+            }
             return value;
         }
 
-        internal static WindowStyles GetWindowStyles(IntPtr hwnd)
+        internal static WINDOWS_STYLE GetWINDOWS_STYLE(IntPtr hwnd)
         {
-            return (WindowStyles)GetWindowLong(hwnd, WindowLongParam.GWL_STYLE).ToInt64();
+            return (WINDOWS_STYLE)GetWindowLong(new HWND(hwnd), GetWindowLongPtr_nIndex.GWL_STYLE);
         }
 
-        internal static ExtendedWindowStyles GetExtendedWindowStyles(IntPtr hwnd)
+        internal static WINDOWS_EX_STYLE GetWINDOWS_EX_STYLE(IntPtr hwnd)
         {
-            return (ExtendedWindowStyles)GetWindowLong(hwnd, WindowLongParam.GWL_EXSTYLE).ToInt64();
+            return (WINDOWS_EX_STYLE)GetWindowLong(new HWND(hwnd), GetWindowLongPtr_nIndex.GWL_EXSTYLE);
         }
 
         internal WINDOWPLACEMENT GetWindowPlacementSafe()
         {
             WINDOWPLACEMENT wplc = default;
-            if (!GetWindowPlacement(m_hwnd, ref wplc))
+            if (!GetWindowPlacement(new HWND(m_hwnd), ref wplc))
             {
                 CheckAlive();
                 throw new Win32Exception();
@@ -657,13 +679,13 @@ namespace WinMan.Windows
             return wplc;
         }
 
-        private static WindowState FromSW(SW sw)
+        private static WindowState FromSW(SHOW_WINDOW_CMD sw)
         {
-            if (sw.HasFlag(SW.Maximize))
+            if (sw.HasFlag(SHOW_WINDOW_CMD.SW_MAXIMIZE))
             {
                 return WindowState.Maximized;
             }
-            else if (sw.HasFlag(SW.ShowMinimized))
+            else if (sw.HasFlag(SHOW_WINDOW_CMD.SW_SHOWMINIMIZED))
             {
                 return WindowState.Minimized;
             }
@@ -672,14 +694,13 @@ namespace WinMan.Windows
 
         private Rectangle GetWindowRectSafe()
         {
-            RECT rc = default;
-            if (!GetWindowRect(m_hwnd, ref rc))
+            if (!GetWindowRect(new HWND(m_hwnd), out RECT rc))
             {
                 CheckAlive();
                 throw new Win32Exception();
             }
 
-            return new Rectangle(rc.LEFT, rc.TOP, rc.RIGHT, rc.BOTTOM);
+            return new Rectangle(rc.left, rc.top, rc.right, rc.bottom);
         }
 
         private void UpdateConfiguration()
@@ -693,7 +714,7 @@ namespace WinMan.Windows
                 state = FromSW(wplc.showCmd);
 
                 placement = GetWindowRectSafe();
-                isTopmost = GetExtendedWindowStyles(m_hwnd).HasFlag(ExtendedWindowStyles.WS_EX_TOPMOST);
+                isTopmost = GetWINDOWS_EX_STYLE(m_hwnd).HasFlag(WINDOWS_EX_STYLE.WS_EX_TOPMOST);
                 if (state == WindowState.Restored && m_workspace.DisplayManager.Displays.Any(x => x.Bounds == placement))
                 {
                     state = WindowState.Maximized;
@@ -761,29 +782,34 @@ namespace WinMan.Windows
             {
                 MINMAXINFO info = new MINMAXINFO
                 {
-                    ptMinTrackSize = new POINT(0, 0),
-                    ptMaxTrackSize = new POINT(int.MaxValue, int.MaxValue),
+                    ptMinTrackSize = new POINT { x = 0, y = 0 },
+                    ptMaxTrackSize = new POINT { x = int.MaxValue, y = int.MaxValue },
                 };
 
-                if (IntPtr.Zero == SendMessageTimeout(Handle, WM_GETMINMAXINFO, IntPtr.Zero, ref info, SendMessageTimeoutFlags.SMTO_NORMAL | SendMessageTimeoutFlags.SMTO_ABORTIFHUNG, 3000, out var result))
+                var flags = SendMessageTimeout_fuFlags.SMTO_NORMAL | SendMessageTimeout_fuFlags.SMTO_ABORTIFHUNG;
+                unsafe
                 {
-                    throw new Win32Exception();
-                }
-                if (IntPtr.Zero != result)
-                {
-                    throw new Win32Exception();
+                    nuint result = 0;
+                    if (new LRESULT() == SendMessageTimeout(new(Handle), Constants.WM_GETMINMAXINFO, new(), new(new IntPtr(&info)), flags, 3000, &result))
+                    {
+                        throw new Win32Exception();
+                    }
+                    if (0 != result)
+                    {
+                        throw new Win32Exception();
+                    }
                 }
 
                 Point? minSize = null;
-                if (info.ptMinTrackSize.X !=0 && info.ptMinTrackSize.Y != 0)
+                if (info.ptMinTrackSize.x !=0 && info.ptMinTrackSize.y != 0)
                 {
-                    minSize = new Point(info.ptMinTrackSize.X, info.ptMinTrackSize.Y);
+                    minSize = new Point(info.ptMinTrackSize.x, info.ptMinTrackSize.y);
                 }
 
                 Point? maxSize = null;
-                if (info.ptMaxTrackSize.X != int.MaxValue && info.ptMaxTrackSize.Y != int.MaxValue)
+                if (info.ptMaxTrackSize.x != int.MaxValue && info.ptMaxTrackSize.y != int.MaxValue)
                 {
-                    maxSize = new Point(info.ptMaxTrackSize.X, info.ptMaxTrackSize.Y);
+                    maxSize = new Point(info.ptMaxTrackSize.x, info.ptMaxTrackSize.y);
                 }
 
                 return (minSize, maxSize);

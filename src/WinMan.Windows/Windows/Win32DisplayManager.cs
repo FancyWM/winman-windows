@@ -4,6 +4,7 @@ using System.ComponentModel;
 using System.Linq;
 using System.Runtime.InteropServices;
 
+using static WinMan.Windows.Constants;
 using static WinMan.Windows.NativeMethods;
 
 namespace WinMan.Windows
@@ -20,10 +21,10 @@ namespace WinMan.Windows
         {
             get
             {
-                int x = GetSystemMetrics(SystemMetric.SM_XVIRTUALSCREEN);
-                int y = GetSystemMetrics(SystemMetric.SM_YVIRTUALSCREEN);
-                int width = GetSystemMetrics(SystemMetric.SM_CXVIRTUALSCREEN);
-                int height = GetSystemMetrics(SystemMetric.SM_CYVIRTUALSCREEN);
+                int x = GetSystemMetrics(GetSystemMetrics_nIndexFlags.SM_XVIRTUALSCREEN);
+                int y = GetSystemMetrics(GetSystemMetrics_nIndexFlags.SM_YVIRTUALSCREEN);
+                int width = GetSystemMetrics(GetSystemMetrics_nIndexFlags.SM_CXVIRTUALSCREEN);
+                int height = GetSystemMetrics(GetSystemMetrics_nIndexFlags.SM_CYVIRTUALSCREEN);
 
                 return new Rectangle(x, y, x + width, y + height);
             }
@@ -57,16 +58,19 @@ namespace WinMan.Windows
         private List<IntPtr> GetMonitors()
         {
             List<IntPtr> monitors = new List<IntPtr>();
-            if (!EnumDisplayMonitors(IntPtr.Zero, IntPtr.Zero, delegate (IntPtr hMonitor, IntPtr hdcMonitor, ref RECT lprcMonitor, IntPtr dwData)
+            unsafe
             {
-                if (IsVisibleMonitor(hMonitor))
+                if (!EnumDisplayMonitors(new(), (RECT*)null, delegate (HMONITOR hMonitor, HDC hdcMonitor, RECT* lprcMonitor, LPARAM dwData)
                 {
-                    monitors.Add(hMonitor);
+                    if (IsVisibleMonitor(hMonitor))
+                    {
+                        monitors.Add(hMonitor);
+                    }
+                    return true;
+                }, new LPARAM()))
+                {
+                    throw new Win32Exception();
                 }
-                return true;
-            }, IntPtr.Zero))
-            {
-                throw new Win32Exception();
             }
             return monitors;
         }
@@ -74,13 +78,13 @@ namespace WinMan.Windows
         internal Rectangle GetWorkArea(IntPtr hMonitor)
         {
             var rect = GetMonitorInfo(hMonitor).rcWork;
-            return new Rectangle(rect.LEFT, rect.TOP, rect.RIGHT, rect.BOTTOM);
+            return new Rectangle(rect.left, rect.top, rect.right, rect.bottom);
         }
 
         internal Rectangle GetBounds(IntPtr hMonitor)
         {
             var rect = GetMonitorInfo(hMonitor).rcMonitor;
-            return new Rectangle(rect.LEFT, rect.TOP, rect.RIGHT, rect.BOTTOM);
+            return new Rectangle(rect.left, rect.top, rect.right, rect.bottom);
         }
 
         internal void OnDisplayChange()
@@ -156,9 +160,9 @@ namespace WinMan.Windows
         private MONITORINFO GetMonitorInfo(IntPtr hMonitor)
         {
             MONITORINFO mi = default;
-            mi.cbSize = Marshal.SizeOf<MONITORINFO>();
+            mi.cbSize = (uint)Marshal.SizeOf<MONITORINFO>();
 
-            if (!NativeMethods.GetMonitorInfo(hMonitor, ref mi))
+            if (!NativeMethods.GetMonitorInfo(new(hMonitor), ref mi))
             {
                 try
                 {

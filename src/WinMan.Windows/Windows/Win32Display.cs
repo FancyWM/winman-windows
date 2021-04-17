@@ -132,7 +132,7 @@ namespace WinMan.Windows
         {
             if (IsPerMonitorDPISupported)
             {
-                NT_6_3.GetDpiForMonitor(m_hMonitor, NT_6_3.MDT_EFFECTIVE_DPI, out uint dpiX, out _);
+                NT_6_3.GetDpiForMonitor(new(m_hMonitor), MONITOR_DPI_TYPE.MDT_EFFECTIVE_DPI, out uint dpiX, out _);
                 return dpiX / 96.0;
             }
             else

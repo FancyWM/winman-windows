@@ -5,6 +5,7 @@ using System.Linq;
 
 using WinMan.Windows.Utilities;
 
+using static WinMan.Windows.Constants;
 using static WinMan.Windows.NativeMethods;
 
 namespace WinMan.Windows
@@ -18,8 +19,8 @@ namespace WinMan.Windows
             uint min = eventTypes.Min();
             uint max = eventTypes.Max();
 
-            WinEventProc? callback = delegate (IntPtr hWinEventHook, uint eventType,
-                IntPtr hwnd, int idObject, int idChild, uint dwEventThread, uint dwmsEventTime)
+            WINEVENTPROC? callback = delegate (HWINEVENTHOOK hWinEventHook, uint eventType,
+                HWND hwnd, int idObject, int idChild, uint dwEventThread, uint dwmsEventTime)
             {
                 if (eventTypes.Contains(eventType))
                 {
@@ -37,7 +38,7 @@ namespace WinMan.Windows
             {
                 // Capture and null callback
                 callback = null;
-                UnhookWinEvent(hHook);
+                UnhookWinEvent(new(hHook));
             });
         }
     }
