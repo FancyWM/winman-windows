@@ -1,6 +1,6 @@
 ﻿using System.Runtime.InteropServices;
 
-namespace WinMan.Windows
+namespace WinMan.Windows.DllImports
 {
     internal static partial class NativeMethods
     {

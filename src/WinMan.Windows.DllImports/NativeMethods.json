@@ -1,5 +1,5 @@
 {
   "$schema": "https://aka.ms/CsWin32.schema.json",
-  "namespace": "WinMan.Windows",
+  "namespace": "WinMan.Windows.DllImports",
   "className": "NativeMethods"
 }

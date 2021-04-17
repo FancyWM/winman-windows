@@ -8,8 +8,9 @@ using System.Threading;
 
 using WinMan.Windows.Utilities;
 
-using static WinMan.Windows.Constants;
-using static WinMan.Windows.NativeMethods;
+using WinMan.Windows.DllImports;
+using static WinMan.Windows.DllImports.Constants;
+using static WinMan.Windows.DllImports.NativeMethods;
 
 namespace WinMan.Windows
 {
@@ -127,7 +128,7 @@ namespace WinMan.Windows
         public TimeSpan WatchInterval
         {
             get => m_watchInterval;
-            set 
+            set
             {
                 lock (m_initSyncRoot)
                 {
@@ -328,8 +329,8 @@ namespace WinMan.Windows
         {
             unsafe
             {
-                fixed (char* lpClassName = "STATIC".ToCharArray(), 
-                    lpWindowName = "WinManMessageReceiver".ToCharArray()) 
+                fixed (char* lpClassName = "STATIC".ToCharArray(),
+                    lpWindowName = "WinManMessageReceiver".ToCharArray())
                 {
                     m_msgWnd = CreateWindowEx(
                         WINDOWS_EX_STYLE.WS_EX_NOACTIVATE,
@@ -425,7 +426,7 @@ namespace WinMan.Windows
 
         private void OnTimerWatch()
         {
-            // Dirty checking is still needed, as some things do not have corresponding events. 
+            // Dirty checking is still needed, as some things do not have corresponding events.
             // For example, virtual desktop addition/removal or windows changing their WINDOWS_STYLE at runtime
             // cannot be observed directly.
             RefreshConfiguration();
@@ -673,7 +674,7 @@ namespace WinMan.Windows
                     {
                         FocusedWindowChanged?.Invoke(this, new FocusedWindowChangedEventArgs(window.WindowObject, null));
                     }
-                    else if (m_windowSet.TryGetValue(oldFocusedHwnd, out var oldWindow) && oldWindow.WindowObject != null) 
+                    else if (m_windowSet.TryGetValue(oldFocusedHwnd, out var oldWindow) && oldWindow.WindowObject != null)
                     {
                         FocusedWindowChanged?.Invoke(this, new FocusedWindowChangedEventArgs(window.WindowObject, oldWindow.WindowObject));
                     }

@@ -1,7 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
 
-using static WinMan.Windows.NativeMethods;
+using WinMan.Windows.DllImports;
+using static WinMan.Windows.DllImports.NativeMethods;
 
 namespace WinMan.Windows
 {

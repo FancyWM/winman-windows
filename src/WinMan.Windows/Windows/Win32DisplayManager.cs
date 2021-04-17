@@ -4,8 +4,9 @@ using System.ComponentModel;
 using System.Linq;
 using System.Runtime.InteropServices;
 
-using static WinMan.Windows.Constants;
-using static WinMan.Windows.NativeMethods;
+using WinMan.Windows.DllImports;
+using static WinMan.Windows.DllImports.Constants;
+using static WinMan.Windows.DllImports.NativeMethods;
 
 namespace WinMan.Windows
 {

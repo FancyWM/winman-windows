@@ -5,8 +5,9 @@ using System.Linq;
 
 using WinMan.Windows.Utilities;
 
-using static WinMan.Windows.Constants;
-using static WinMan.Windows.NativeMethods;
+using WinMan.Windows.DllImports;
+using static WinMan.Windows.DllImports.Constants;
+using static WinMan.Windows.DllImports.NativeMethods;
 
 namespace WinMan.Windows
 {
