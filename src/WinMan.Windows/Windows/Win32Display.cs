@@ -1,16 +1,10 @@
 ﻿using System;
 using System.Collections.Generic;
 
-using WinMan.Windows.DllImports;
-using static WinMan.Windows.DllImports.NativeMethods;
-
 namespace WinMan.Windows
 {
     public class Win32Display : IDisplay
     {
-        private static readonly bool IsPerMonitorDPISupported = Environment.OSVersion.Version.Major > 6
-            || (Environment.OSVersion.Version.Major == 6 && Environment.OSVersion.Version.Minor >= 3);
-
         public event EventHandler<DisplayChangedEventArgs>? Removed;
 
         public event EventHandler<DisplayRectangleChangedEventArgs>? WorkAreaChanged;
@@ -18,6 +12,8 @@ namespace WinMan.Windows
         public event EventHandler<DisplayRectangleChangedEventArgs>? BoundsChanged;
 
         public event EventHandler<DisplayScalingChangedEventArgs>? ScalingChanged;
+
+        public event EventHandler<DisplayRefreshRateChangedEventArgs?> RefreshRateChanged;
 
         public Rectangle WorkArea
         {
@@ -52,6 +48,15 @@ namespace WinMan.Windows
             }
         }
 
+        public int RefreshRate
+        {
+            get
+            {
+                // int read is atomic
+                return m_refreshRate;
+            }
+        }
+
         public IWorkspace Workspace => m_manager.Workspace;
 
         internal IntPtr Handle => m_hMonitor;
@@ -60,18 +65,23 @@ namespace WinMan.Windows
         private readonly IntPtr m_hMonitor;
 
         private readonly object m_syncRoot = new object();
+        private string m_deviceName;
         private Rectangle m_workArea;
         private Rectangle m_bounds;
         private double m_scaling;
+        private int m_refreshRate;
 
         internal Win32Display(Win32DisplayManager manager, IntPtr hMonitor)
         {
             m_manager = manager;
             m_hMonitor = hMonitor;
 
-            m_workArea = m_manager.GetWorkArea(m_hMonitor);
-            m_bounds = m_manager.GetBounds(m_hMonitor);
-            m_scaling = GetDpiScale();
+            var (deviceName, workArea, bounds, scaling, refreshRate) = m_manager.GetMonitorSettings(m_hMonitor);
+            m_deviceName = deviceName;
+            m_workArea = workArea;
+            m_bounds = bounds;
+            m_scaling = scaling;
+            m_refreshRate = refreshRate;
         }
 
         internal void OnSettingChange()
@@ -79,11 +89,15 @@ namespace WinMan.Windows
             Rectangle newWorkArea;
             Rectangle newBounds;
             double newScaling;
+            int newRefreshRate;
             try
             {
-                newWorkArea = m_manager.GetWorkArea(m_hMonitor);
-                newBounds = m_manager.GetBounds(m_hMonitor);
-                newScaling = GetDpiScale();
+                // Device name cannot change
+                var (_, workArea, bounds, scaling, refreshRate) = m_manager.GetMonitorSettings(m_hMonitor);
+                newWorkArea = workArea;
+                newBounds = bounds;
+                newScaling = scaling;
+                newRefreshRate = refreshRate;
             }
             catch (InvalidDisplayReferenceException)
             {
@@ -122,24 +136,22 @@ namespace WinMan.Windows
                 }
                 ScalingChanged?.Invoke(this, new DisplayScalingChangedEventArgs(this, newScaling, oldScaling));
             }
+
+            if (newRefreshRate != m_refreshRate)
+            {
+                int oldRefreshRate;
+                lock (m_syncRoot)
+                {
+                    oldRefreshRate = m_refreshRate;
+                    m_refreshRate = newRefreshRate;
+                }
+                RefreshRateChanged?.Invoke(this, new DisplayRefreshRateChangedEventArgs(this, newRefreshRate, oldRefreshRate));
+            }
         }
 
         internal void OnRemoved()
         {
             Removed?.Invoke(this, new DisplayChangedEventArgs(this));
-        }
-
-        private double GetDpiScale()
-        {
-            if (IsPerMonitorDPISupported)
-            {
-                NT_6_3.GetDpiForMonitor(new(m_hMonitor), MONITOR_DPI_TYPE.MDT_EFFECTIVE_DPI, out uint dpiX, out _);
-                return dpiX / 96.0;
-            }
-            else
-            {
-                return 1.0;
-            }
         }
 
         public override bool Equals(object obj)
@@ -151,6 +163,11 @@ namespace WinMan.Windows
         public override int GetHashCode()
         {
             return 1786700523 + Handle.GetHashCode();
+        }
+
+        public override string ToString()
+        {
+            return $"Win32Display {{ {m_deviceName} }}";
         }
     }
 }

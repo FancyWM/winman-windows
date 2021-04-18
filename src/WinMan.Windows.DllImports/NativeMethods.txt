@@ -7,6 +7,8 @@ DwmGetWindowAttribute
 DwmRegisterThumbnail
 DwmUnregisterThumbnail
 EnumDisplayMonitors
+EnumDisplaySettings
+EnumWindows
 GetAncestor
 GetClassName
 GetCursorPos
@@ -18,6 +20,7 @@ GetMonitorInfo
 GetParent
 GetShellWindow
 GetSystemMetrics
+GetWindow
 GetWindowLong
 GetWindowPlacement
 GetWindowRect
@@ -33,12 +36,10 @@ SendMessageTimeout
 SetForegroundWindow
 SetLastError
 SetTimer
+SetWinEventHook
 SetWindowLong
 SetWindowPos
-SetWinEventHook
 ShowWindow
-EnumWindows
-GetWindow
 
 WM_DISPLAYCHANGE
 WM_GETMINMAXINFO
@@ -49,6 +50,7 @@ WM_TIMER
 WM_USER
 
 MINMAXINFO
+MONITORINFOEXW
 
 DWM_CLOAKED_SHELL
 

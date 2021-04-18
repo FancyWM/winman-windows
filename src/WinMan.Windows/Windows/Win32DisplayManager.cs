@@ -18,6 +18,9 @@ namespace WinMan.Windows
         public event EventHandler<DisplayRectangleChangedEventArgs>? VirtualDisplayBoundsChanged;
         public event EventHandler<PrimaryDisplayChangedEventArgs>? PrimaryDisplayChanged;
 
+        private static readonly bool IsPerMonitorDPISupported = Environment.OSVersion.Version.Major > 6
+            || (Environment.OSVersion.Version.Major == 6 && Environment.OSVersion.Version.Minor >= 3);
+
         public Rectangle VirtualDisplayBounds
         {
             get
@@ -74,18 +77,6 @@ namespace WinMan.Windows
                 }
             }
             return monitors;
-        }
-
-        internal Rectangle GetWorkArea(IntPtr hMonitor)
-        {
-            var rect = GetMonitorInfo(hMonitor).rcWork;
-            return new Rectangle(rect.left, rect.top, rect.right, rect.bottom);
-        }
-
-        internal Rectangle GetBounds(IntPtr hMonitor)
-        {
-            var rect = GetMonitorInfo(hMonitor).rcMonitor;
-            return new Rectangle(rect.left, rect.top, rect.right, rect.bottom);
         }
 
         internal void OnDisplayChange()
@@ -158,6 +149,49 @@ namespace WinMan.Windows
             return (GetMonitorInfo(hMonitor).dwFlags & DISPLAY_DEVICE_MIRRORING_DRIVER) == 0;
         }
 
+        internal (string deviceName, Rectangle workArea, Rectangle bounds, double dpiScale, int refreshRate) GetMonitorSettings(IntPtr hMonitor)
+        {
+            var (mi, device, devMode) = GetMonitorInfoAndSettings(hMonitor);
+            var dpiScale = GetDpiScale(hMonitor);
+            return (
+                deviceName: device,
+                workArea: new Rectangle(mi.rcWork.left, mi.rcWork.top, mi.rcWork.right, mi.rcWork.bottom),
+                bounds: new Rectangle(mi.rcMonitor.left, mi.rcMonitor.top, mi.rcMonitor.right, mi.rcMonitor.bottom),
+                dpiScale,
+                refreshRate: (int)devMode.dmDisplayFrequency);
+        }
+
+        private int GetRefreshRate(IntPtr hMonitor)
+        {
+            var (_, _, devMode) = GetMonitorInfoAndSettings(hMonitor);
+            return (int)devMode.dmDisplayFrequency;
+        }
+
+        private Rectangle GetWorkArea(IntPtr hMonitor)
+        {
+            var rect = GetMonitorInfo(hMonitor).rcWork;
+            return new Rectangle(rect.left, rect.top, rect.right, rect.bottom);
+        }
+
+        private Rectangle GetBounds(IntPtr hMonitor)
+        {
+            var rect = GetMonitorInfo(hMonitor).rcMonitor;
+            return new Rectangle(rect.left, rect.top, rect.right, rect.bottom);
+        }
+
+        private double GetDpiScale(IntPtr hMonitor)
+        {
+            if (IsPerMonitorDPISupported)
+            {
+                NT_6_3.GetDpiForMonitor(new(hMonitor), MONITOR_DPI_TYPE.MDT_EFFECTIVE_DPI, out uint dpiX, out _);
+                return dpiX / 96.0;
+            }
+            else
+            {
+                return 1.0;
+            }
+        }
+
         private MONITORINFO GetMonitorInfo(IntPtr hMonitor)
         {
             MONITORINFO mi = default;
@@ -176,6 +210,42 @@ namespace WinMan.Windows
             }
 
             return mi;
+        }
+
+        private (MONITORINFO mi, string device) GetMonitorInfoEx(IntPtr hMonitor)
+        {
+            unsafe
+            {
+                MONITORINFOEXW miEx = default;
+                MONITORINFO* pmi = (MONITORINFO*)&miEx;
+                (*pmi).cbSize = (uint)sizeof(MONITORINFOEXW);
+                if (!NativeMethods.GetMonitorInfo(new(hMonitor), pmi))
+                {
+                    try
+                    {
+                        throw new Win32Exception();
+                    }
+                    catch (Win32Exception e) when (e.IsInvalidMonitorHandleException())
+                    {
+                        throw new InvalidDisplayReferenceException(hMonitor, e);
+                    }
+                }
+
+                char* pszDevice = (char*)&miEx.szDevice;
+                return (*pmi, new string(pszDevice));
+            }
+        }
+
+        private (MONITORINFO mi, string device, DEVMODEW devMode) GetMonitorInfoAndSettings(IntPtr hMonitor)
+        {
+            var (mi, device) = GetMonitorInfoEx(hMonitor);
+            DEVMODEW devMode = default;
+            if (!EnumDisplaySettings(device, ENUM_DISPLAY_SETTINGS_MODE.ENUM_CURRENT_SETTINGS, ref devMode))
+            {
+                throw new Win32Exception();
+            }
+
+            return (mi, device, devMode);
         }
     }
 }
