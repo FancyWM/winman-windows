@@ -2,10 +2,9 @@
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Linq;
-using System.Runtime.InteropServices;
-using System.Text;
 
 using WinMan.Windows.DllImports;
+
 using static WinMan.Windows.DllImports.NativeMethods;
 
 namespace WinMan.Windows
@@ -79,7 +78,7 @@ namespace WinMan.Windows
 
         public bool CanResize => UseDefaults(() => GetWINDOWS_STYLE(m_hwnd).HasFlag(WINDOWS_STYLE.WS_SIZEBOX) && ProbeAccess(), false);
 
-        public bool CanMove => UseDefaults(() => State == WindowState.Restored && ProbeAccess(), false);
+        public bool CanMove => UseDefaults(() => ProbeAccess(), false);
 
         public bool CanReorder => UseDefaults(() => ProbeAccess(), false);
 
@@ -178,6 +177,11 @@ namespace WinMan.Windows
 
         public void SetPosition(Rectangle position)
         {
+            if (m_state != WindowState.Restored)
+            {
+                throw new InvalidOperationException("Cannot set the position of a window that is not in the restored state!");
+            }
+
             var flags = SetWindowPos_uFlags.SWP_NOZORDER | SetWindowPos_uFlags.SWP_ASYNCWINDOWPOS | SetWindowPos_uFlags.SWP_NOACTIVATE;
             Rectangle currentPosition = Position;
             if (!CanResize)
@@ -207,8 +211,6 @@ namespace WinMan.Windows
 
         public void SetState(WindowState state)
         {
-            CheckAlive();
-
             try
             {
                 SHOW_WINDOW_CMD sw;
@@ -237,13 +239,13 @@ namespace WinMan.Windows
 
                 if (!ShowWindow(new(m_hwnd), sw))
                 {
+                    // Returns false when was previously visible or when failed.
                     CheckAlive();
-                    throw new Win32Exception();
                 }
 
                 UpdateStateAndNotify(state);
             }
-            catch (Win32Exception)
+            catch (Win32Exception e) when (!e.IsInvalidWindowHandleException())
             {
                 CheckAlive();
                 throw;
@@ -268,22 +270,14 @@ namespace WinMan.Windows
             }
         }
 
-        public void RequestFocus()
+        public bool RequestFocus()
         {
-            CheckAlive();
-
-            try
+            if (!SetForegroundWindow(new HWND(m_hwnd)))
             {
-                if (!SetForegroundWindow(new HWND(m_hwnd)))
-                {
-                    throw new Win32Exception();
-                }
-            }
-            catch (Win32Exception e) when (e.IsInvalidWindowHandleException())
-            {
-                m_isDead = true;
                 CheckAlive();
+                return false;
             }
+            return true;
         }
 
         public void InsertAfter(IWindow other)
