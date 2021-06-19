@@ -34,7 +34,7 @@ namespace WinMan.Windows
             }
         }
 
-        public IDisplay PrimaryDisplay => Displays.First(x => x.Bounds.TopLeft == new Point(0, 0));
+        public IDisplay PrimaryDisplay { get; private set; }
 
         public IReadOnlyList<IDisplay> Displays
         {
@@ -57,6 +57,7 @@ namespace WinMan.Windows
         {
             m_workspace = workspace;
             m_displays = new HashSet<Win32Display>(GetMonitors().Select(x => new Win32Display(this, x)));
+            PrimaryDisplay = m_displays.First(x => x.Bounds.TopLeft == new Point(0, 0));
         }
 
         private List<IntPtr> GetMonitors()
@@ -84,8 +85,11 @@ namespace WinMan.Windows
             var addedDisplays = new List<Win32Display>();
             var removedDisplays = new List<Win32Display>();
 
+            IDisplay oldPrimaryDisplay;
+            IDisplay newPrimaryDisplay;
             lock (m_displays)
             {
+                oldPrimaryDisplay = PrimaryDisplay;
                 var newMonitors = GetMonitors();
                 var handles = m_displays.Select(x => x.Handle);
 
@@ -105,27 +109,45 @@ namespace WinMan.Windows
                     m_displays.Add(disp);
                     addedDisplays.Add(disp);
                 }
+
+                newPrimaryDisplay = m_displays.First(x => x.Bounds.TopLeft == new Point(0, 0));
+                if (oldPrimaryDisplay != newPrimaryDisplay)
+                {
+                    PrimaryDisplay = newPrimaryDisplay;
+                }
             }
 
             try
             {
-                foreach (var added in addedDisplays)
+                // Added events
+                try
                 {
-                    Added?.Invoke(added, new DisplayChangedEventArgs(added));
+                    foreach (var added in addedDisplays)
+                    {
+                        Added?.Invoke(added, new DisplayChangedEventArgs(added));
+                    }
+                }
+                finally
+                {
+                    // Removed events
+                    foreach (var removed in removedDisplays)
+                    {
+                        try
+                        {
+                            removed.OnRemoved();
+                        }
+                        finally
+                        {
+                            Removed?.Invoke(removed, new DisplayChangedEventArgs(removed));
+                        }
+                    }
                 }
             }
             finally
             {
-                foreach (var removed in removedDisplays)
+                if (oldPrimaryDisplay != newPrimaryDisplay)
                 {
-                    try
-                    {
-                        removed.OnRemoved();
-                    }
-                    catch
-                    {
-                        Removed?.Invoke(removed, new DisplayChangedEventArgs(removed));
-                    }
+                    PrimaryDisplayChanged?.Invoke(this, new PrimaryDisplayChangedEventArgs(newPrimaryDisplay, oldPrimaryDisplay));
                 }
             }
         }
@@ -221,14 +243,7 @@ namespace WinMan.Windows
                 (*pmi).cbSize = (uint)sizeof(MONITORINFOEXW);
                 if (!NativeMethods.GetMonitorInfo(new(hMonitor), pmi))
                 {
-                    try
-                    {
-                        throw new Win32Exception();
-                    }
-                    catch (Win32Exception e) when (e.IsInvalidMonitorHandleException())
-                    {
-                        throw new InvalidDisplayReferenceException(hMonitor, e);
-                    }
+                    throw new InvalidDisplayReferenceException(hMonitor, new Win32Exception());
                 }
 
                 char* pszDevice = (char*)&miEx.szDevice;
