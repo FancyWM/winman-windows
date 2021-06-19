@@ -583,6 +583,10 @@ namespace WinMan.Windows
                 {
                     return false;
                 }
+                if (style.HasFlag(WINDOWS_STYLE.WS_POPUP))
+                {
+                    return false;
+                }
 
                 WINDOWS_EX_STYLE exStyle = GetWINDOWS_EX_STYLE(hwnd);
 
