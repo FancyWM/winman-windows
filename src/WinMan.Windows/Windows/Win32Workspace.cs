@@ -548,7 +548,7 @@ namespace WinMan.Windows
                     CursorLocationChanged?.Invoke(this, new CursorLocationChangedEventArgs(this, newLocation, oldLocation));
                 }
             }
-            catch (Win32Exception e) when (e.Message == "Access is denied.")
+            catch (Win32Exception e) when ((uint)e.HResult == /*E_ACCESSDENIED*/ 0x80070005)
             {
                 // Ignore access denied
             }
