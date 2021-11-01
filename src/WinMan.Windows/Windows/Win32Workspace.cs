@@ -695,7 +695,14 @@ namespace WinMan.Windows
         {
             if (Win32Window.GetIsTopLevelVisible(this, window.Handle))
             {
-                window.EnsureWindowObject(this);
+                try
+                {
+                    window.EnsureWindowObject(this);
+                }
+                catch (InvalidWindowReferenceException)
+                {
+                    return false;
+                }
                 return true;
             }
             return false;
