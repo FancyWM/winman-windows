@@ -2,6 +2,7 @@
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Linq;
+using System.Runtime.InteropServices;
 
 using WinMan.Windows.DllImports;
 
@@ -583,10 +584,6 @@ namespace WinMan.Windows
                 {
                     return false;
                 }
-                if (style.HasFlag(WINDOWS_STYLE.WS_POPUP))
-                {
-                    return false;
-                }
 
                 WINDOWS_EX_STYLE exStyle = GetWINDOWS_EX_STYLE(hwnd);
 
@@ -791,7 +788,10 @@ namespace WinMan.Windows
                     nuint result = 0;
                     if (new LRESULT() == SendMessageTimeout(new(Handle), Constants.WM_GETMINMAXINFO, new(), new(new IntPtr(&info)), flags, 3000, &result))
                     {
-                        throw new Win32Exception();
+                        if (Marshal.GetLastWin32Error() != 0)
+                        {
+                            throw new Win32Exception();
+                        }
                     }
                     if (0 != result)
                     {
