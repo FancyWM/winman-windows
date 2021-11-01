@@ -35,7 +35,21 @@ namespace WinMan.Windows
         {
             get
             {
-                return m_desktops[Desktop.FromDesktop(Desktop.Current)];
+                lock (m_desktops)
+                {
+                    try
+                    {
+                        // Always try to get the most recent virtual desktop
+                        return m_desktops[Desktop.FromDesktop(Desktop.Current)];
+                    }
+                    catch (ArgumentOutOfRangeException)
+                    {
+                        // If the above operation fails, that means that CheckVirtualDesktopsChanged
+                        // hasn't had the chance to run yet, so return the last recorded virtual desktop
+                        // or whatever is valid,  but don't let the exception slip out.
+                        return m_desktops[Math.Min(m_currentDesktop, m_desktops.Count - 1)];
+                    }
+                }
             }
         }
 
