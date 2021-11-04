@@ -2,11 +2,11 @@
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
 
-using WinMan.Windows.VirtualDesktop;
+using WinMan.Windows.Windows;
 
 namespace WinMan.Windows
 {
-    public class Win32VirtualDesktopManager : IVirtualDesktopManager
+    public class Win32VirtualDesktopManager : IVirtualDesktopManager, IWin32VirtualDesktopManagerInternal
     {
         private readonly object m_syncRoot = new object();
 
@@ -15,6 +15,10 @@ namespace WinMan.Windows
         private readonly List<Win32VirtualDesktop> m_desktops;
 
         private int m_currentDesktop;
+
+        private readonly IWin32VirtualDesktopService m_vds;
+
+        private readonly IntPtr m_hMon;
 
         public IWorkspace Workspace => m_workspace;
 
@@ -40,7 +44,7 @@ namespace WinMan.Windows
                     try
                     {
                         // Always try to get the most recent virtual desktop
-                        return m_desktops[Desktop.FromDesktop(Desktop.Current)];
+                        return m_desktops[m_vds.GetCurrentDesktopIndex(m_hMon)];
                     }
                     catch (ArgumentOutOfRangeException)
                     {
@@ -57,33 +61,36 @@ namespace WinMan.Windows
         public event EventHandler<DesktopChangedEventArgs>? DesktopRemoved;
         public event EventHandler<CurrentDesktopChangedEventArgs>? CurrentDesktopChanged;
 
-        public Win32VirtualDesktopManager(Win32Workspace workspace)
+        internal Win32VirtualDesktopManager(Win32Workspace workspace, IWin32VirtualDesktopService vds, IntPtr hMon)
         {
             m_workspace = workspace;
             m_desktops = new List<Win32VirtualDesktop>();
-            for (int i = 0; i < Desktop.Count; i++)
+            m_hMon = hMon;
+            m_vds = vds;
+
+            foreach (var d in m_vds.GetVirtualDesktops(m_hMon))
             {
-                m_desktops.Add(new Win32VirtualDesktop(workspace, Desktop.FromIndex(i)));
+                m_desktops.Add(new Win32VirtualDesktop(workspace, m_vds, d));
             }
-            m_currentDesktop = Desktop.FromDesktop(Desktop.Current);
+
+            m_currentDesktop = m_vds.GetCurrentDesktopIndex(m_hMon);
         }
 
         public IVirtualDesktop CreateDesktop()
         {
-            var desktopInternal = Desktop.Create();
-            var desktop = new Win32VirtualDesktop(m_workspace, desktopInternal);
-            lock (m_syncRoot)
-            {
-                m_desktops.Add(desktop);
-            }
-            return desktop;
+            throw new NotImplementedException();
         }
 
         public bool IsWindowPinned(IWindow window)
         {
+            if (window == null)
+            {
+                throw new ArgumentNullException(nameof(window));
+            }
+
             try
             {
-                return Desktop.IsWindowPinned(window.Handle);
+                return m_vds.IsWindowPinned(window.Handle);
             }
             catch (COMException e) when ((uint)e.HResult == /*TYPE_E_ELEMENTNOTFOUND*/ 0x8002802B)
             {
@@ -97,39 +104,19 @@ namespace WinMan.Windows
 
         public void PinWindow(IWindow window)
         {
-            try
-            {
-                Desktop.PinWindow(window.Handle);
-            }
-            catch (COMException e) when ((uint)e.HResult == /*TYPE_E_ELEMENTNOTFOUND*/ 0x8002802B)
-            {
-                if (!window.IsAlive)
-                {
-                    throw new InvalidWindowReferenceException(window.Handle);
-                }
-            }
+            throw new NotImplementedException();
         }
 
         public void UnpinWindow(IWindow window)
         {
-            try 
-            { 
-                Desktop.UnpinWindow(window.Handle);
-            }
-            catch (COMException e) when ((uint)e.HResult == /*TYPE_E_ELEMENTNOTFOUND*/ 0x8002802B)
-            {
-                if (!window.IsAlive)
-                {
-                    throw new InvalidWindowReferenceException(window.Handle);
-                }
-            }
+            throw new NotImplementedException();
         }
 
-        internal bool IsNotOnCurrentDesktop(IntPtr hwnd)
+        bool IWin32VirtualDesktopManagerInternal.IsNotOnCurrentDesktop(IntPtr hwnd)
         {
             try
             {
-                return !DesktopManager.VirtualDesktopManager.IsWindowOnCurrentVirtualDesktop(hwnd);
+                return !m_vds.IsWindowOnCurrentDesktop(hwnd);
             }
             catch (COMException e) when ((uint)e.HResult == /*TYPE_E_ELEMENTNOTFOUND*/ 0x8002802B)
             {
@@ -137,12 +124,12 @@ namespace WinMan.Windows
             }
         }
 
-        internal void CheckVirtualDesktopChanges()
+        void IWin32VirtualDesktopManagerInternal.CheckVirtualDesktopChanges()
         {
             List<Win32VirtualDesktop> removedDesktops = new List<Win32VirtualDesktop>();
             List<Win32VirtualDesktop> addedDesktops = new List<Win32VirtualDesktop>();
 
-            int newDesktopCount = Desktop.Count;
+            int newDesktopCount = m_vds.GetDesktopCount(m_hMon);
             int oldDesktopCount;
             lock (m_syncRoot)
             {
@@ -159,7 +146,7 @@ namespace WinMan.Windows
                 {
                     for (int i = oldDesktopCount; i < newDesktopCount; i++)
                     {
-                        var newInstance = new Win32VirtualDesktop(m_workspace, Desktop.FromIndex(i));
+                        var newInstance = new Win32VirtualDesktop(m_workspace, m_vds, m_vds.GetDesktopByIndex(m_hMon, i));
                         m_desktops.Add(newInstance);
                         addedDesktops.Add(newInstance);
                     }
@@ -208,7 +195,7 @@ namespace WinMan.Windows
                 throw new AggregateException(exs);
             }
 
-            int newCurrentDesktop = Desktop.FromDesktop(Desktop.Current);
+            int newCurrentDesktop = m_vds.GetCurrentDesktopIndex(m_hMon);
             int oldCurrentDesktop;
             IVirtualDesktop newDesktop;
             IVirtualDesktop? oldDesktop;

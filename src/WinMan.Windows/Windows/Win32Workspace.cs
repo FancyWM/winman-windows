@@ -11,6 +11,7 @@ using WinMan.Windows.Utilities;
 using WinMan.Windows.DllImports;
 using static WinMan.Windows.DllImports.Constants;
 using static WinMan.Windows.DllImports.NativeMethods;
+using WinMan.Windows.Windows;
 
 namespace WinMan.Windows
 {
@@ -89,14 +90,28 @@ namespace WinMan.Windows
 
                 IVirtualDesktopManager Init()
                 {
+                    IWin32VirtualDesktopService vds = null;
                     try
                     {
-                        return new Win32VirtualDesktopManager(this);
+                        vds = new Win32VirtualDesktopService1809();
                     }
                     catch
                     {
-                        return new DummyVirtualDesktopManager(this);
+                        try
+                        {
+                            vds = new Win32VirtualDesktopService21H2();
+                        }
+                        catch
+                        {
+                        }
                     }
+
+                    if (vds != null)
+                    {
+                        // TODO: Pass HMONITOR
+                        return new Win32VirtualDesktopManager(this, vds, IntPtr.Zero);
+                    }
+                    return new DummyVirtualDesktopManager(this);
                 }
 
                 if (m_virtualDesktops == null)
@@ -216,8 +231,15 @@ namespace WinMan.Windows
             {
                 handle = m_windowList.FirstOrDefault(x => x.Handle == windowHandle);
             }
-            handle?.EnsureWindowObject(this);
-            return handle?.WindowObject;
+            try
+            {
+                handle?.EnsureWindowObject(this);
+                return handle?.WindowObject;
+            }
+            catch (InvalidWindowReferenceException)
+            {
+                return null;
+            }
         }
 
         public IReadOnlyList<IWindow> GetSnapshot()
@@ -531,7 +553,7 @@ namespace WinMan.Windows
 
         private void CheckVirtualDesktops()
         {
-            if (VirtualDesktopManagerLazy is Win32VirtualDesktopManager vdm)
+            if (VirtualDesktopManagerLazy is IWin32VirtualDesktopManagerInternal vdm)
             {
                 vdm.CheckVirtualDesktopChanges();
             }
@@ -548,7 +570,7 @@ namespace WinMan.Windows
                     CursorLocationChanged?.Invoke(this, new CursorLocationChangedEventArgs(this, newLocation, oldLocation));
                 }
             }
-            catch (Win32Exception e) when ((uint)e.HResult == /*E_ACCESSDENIED*/ 0x80070005)
+            catch (Win32Exception e) when (e.IsAccessDeniedException())
             {
                 // Ignore access denied
             }

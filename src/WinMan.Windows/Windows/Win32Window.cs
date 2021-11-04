@@ -5,6 +5,7 @@ using System.Linq;
 using System.Runtime.InteropServices;
 
 using WinMan.Windows.DllImports;
+using WinMan.Windows.Windows;
 
 using static WinMan.Windows.DllImports.NativeMethods;
 
@@ -598,7 +599,8 @@ namespace WinMan.Windows
                     uint cloaked = GetDwordDwmWindowAttribute(hwnd, DWMWINDOWATTRIBUTE.DWMWA_CLOAKED);
                     if (cloaked > 0)
                     {
-                        if (cloaked == Constants.DWM_CLOAKED_SHELL && workspace.VirtualDesktopManager is Win32VirtualDesktopManager vdm)
+                        // TODO: Windows 11
+                        if (cloaked == Constants.DWM_CLOAKED_SHELL && workspace.VirtualDesktopManager is IWin32VirtualDesktopManagerInternal vdm)
                         {
                             return vdm.IsNotOnCurrentDesktop(hwnd);
                         }
@@ -711,7 +713,8 @@ namespace WinMan.Windows
 
                 placement = GetWindowRectSafe();
                 isTopmost = GetWINDOWS_EX_STYLE(m_hwnd).HasFlag(WINDOWS_EX_STYLE.WS_EX_TOPMOST);
-                if (state == WindowState.Restored && m_workspace.DisplayManager.Displays.Any(x => x.Bounds == placement))
+                // E.g. Chrome fullscreen when switching desktops
+                if (state == WindowState.Restored && m_workspace.DisplayManager.Displays.Any(x => CloseMatch(x.Bounds, placement, threshold: 2)))
                 {
                     state = WindowState.Maximized;
                 }
@@ -725,6 +728,14 @@ namespace WinMan.Windows
             UpdatePositionAndNotify(placement);
             UpdateStateAndNotify(state);
             UpdateTopmostAndNotify(isTopmost);
+        }
+
+        private bool CloseMatch(Rectangle rectA, Rectangle rectB, int threshold)
+        {
+            return Math.Abs(rectA.Left - rectB.Left) <= threshold
+                && Math.Abs(rectA.Top - rectB.Top) <= threshold
+                && Math.Abs(rectA.Right -  rectB.Right) <= threshold
+                && Math.Abs(rectA.Bottom - rectB.Bottom) <= threshold;
         }
 
         private void UpdatePositionAndNotify(Rectangle newPosition)
