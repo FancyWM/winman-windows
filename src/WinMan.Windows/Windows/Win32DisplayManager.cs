@@ -168,19 +168,33 @@ namespace WinMan.Windows
 
         private bool IsVisibleMonitor(IntPtr hMonitor)
         {
-            return (GetMonitorInfo(hMonitor).dwFlags & DISPLAY_DEVICE_MIRRORING_DRIVER) == 0;
+            try
+            {
+                return (GetMonitorInfo(hMonitor).dwFlags & DISPLAY_DEVICE_MIRRORING_DRIVER) == 0;
+            }
+            catch (Win32Exception e) when (e.IsInvalidMonitorHandleException())
+            {
+                throw new InvalidDisplayReferenceException(hMonitor);
+            }
         }
 
         internal (string deviceName, Rectangle workArea, Rectangle bounds, double dpiScale, int refreshRate) GetMonitorSettings(IntPtr hMonitor)
         {
-            var (mi, device, devMode) = GetMonitorInfoAndSettings(hMonitor);
-            var dpiScale = GetDpiScale(hMonitor);
-            return (
-                deviceName: device,
-                workArea: new Rectangle(mi.rcWork.left, mi.rcWork.top, mi.rcWork.right, mi.rcWork.bottom),
-                bounds: new Rectangle(mi.rcMonitor.left, mi.rcMonitor.top, mi.rcMonitor.right, mi.rcMonitor.bottom),
-                dpiScale,
-                refreshRate: (int)devMode.dmDisplayFrequency);
+            try
+            {
+                var (mi, device, devMode) = GetMonitorInfoAndSettings(hMonitor);
+                var dpiScale = GetDpiScale(hMonitor);
+                return (
+                    deviceName: device,
+                    workArea: new Rectangle(mi.rcWork.left, mi.rcWork.top, mi.rcWork.right, mi.rcWork.bottom),
+                    bounds: new Rectangle(mi.rcMonitor.left, mi.rcMonitor.top, mi.rcMonitor.right, mi.rcMonitor.bottom),
+                    dpiScale,
+                    refreshRate: (int)devMode.dmDisplayFrequency);
+            }
+            catch (Win32Exception e) when (e.IsInvalidMonitorHandleException())
+            {
+                throw new InvalidDisplayReferenceException(hMonitor);
+            }
         }
 
         private int GetRefreshRate(IntPtr hMonitor)
@@ -205,8 +219,15 @@ namespace WinMan.Windows
         {
             if (IsPerMonitorDPISupported)
             {
-                NT_6_3.GetDpiForMonitor(new(hMonitor), MONITOR_DPI_TYPE.MDT_EFFECTIVE_DPI, out uint dpiX, out _);
-                return dpiX / 96.0;
+                try
+                {
+                    NT_6_3.GetDpiForMonitor(new(hMonitor), MONITOR_DPI_TYPE.MDT_EFFECTIVE_DPI, out uint dpiX, out _);
+                    return dpiX / 96.0;
+                }
+                catch (Win32Exception e) when (e.IsInvalidMonitorHandleException())
+                {
+                    throw new InvalidDisplayReferenceException(hMonitor);
+                }
             }
             else
             {
@@ -243,7 +264,14 @@ namespace WinMan.Windows
                 (*pmi).cbSize = (uint)sizeof(MONITORINFOEXW);
                 if (!NativeMethods.GetMonitorInfo(new(hMonitor), pmi))
                 {
-                    throw new InvalidDisplayReferenceException(hMonitor, new Win32Exception());
+                    try
+                    {
+                        throw new Win32Exception();
+                    }
+                    catch (Win32Exception e) when (e.IsInvalidMonitorHandleException())
+                    {
+                        throw new InvalidDisplayReferenceException(hMonitor, e);
+                    }
                 }
 
                 char* pszDevice = (char*)&miEx.szDevice;
@@ -257,7 +285,9 @@ namespace WinMan.Windows
             DEVMODEW devMode = default;
             if (!EnumDisplaySettings(device, ENUM_DISPLAY_SETTINGS_MODE.ENUM_CURRENT_SETTINGS, ref devMode))
             {
-                throw new Win32Exception();
+                // GetMonitorInfo will throw InvalidDisplayReferenceException if the HMONITOR is dead.
+                GetMonitorInfo(hMonitor);
+                throw new Win32Exception("Couldn't read the monitor settings.");
             }
 
             return (mi, device, devMode);
