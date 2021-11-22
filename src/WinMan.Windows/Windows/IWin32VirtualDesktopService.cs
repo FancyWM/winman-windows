@@ -17,6 +17,8 @@ namespace WinMan.Windows
 
         void SwitchToDesktop(IntPtr hMon, object desktop);
 
+        void MoveToDesktop(IntPtr hWnd, object desktop);
+
         bool IsWindowOnCurrentDesktop(IntPtr hWnd);
 
         bool HasWindow(object desktop, IntPtr hWnd);

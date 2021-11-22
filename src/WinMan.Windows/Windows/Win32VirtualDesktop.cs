@@ -76,7 +76,14 @@ namespace WinMan.Windows
 
         public void MoveWindow(IWindow window)
         {
-            throw new NotImplementedException();
+            try
+            {
+                m_vds.MoveToDesktop(window.Handle, m_desktop);
+            }
+            catch (Exception e) when (!window.IsAlive)
+            {
+                throw new InvalidWindowReferenceException(window.Handle, e);
+            }
         }
 
         public void SetName(string newName)

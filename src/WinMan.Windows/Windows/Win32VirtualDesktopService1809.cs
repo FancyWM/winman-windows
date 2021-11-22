@@ -114,6 +114,12 @@ namespace WinMan.Windows
             return (IComVirtualDesktop)objdesktop;
         }
 
+        public void MoveToDesktop(IntPtr hWnd, object desktop)
+        {
+            ApplicationViewCollection.GetViewForHwnd(hWnd, out var view);
+            VirtualDesktopManagerInternal.MoveViewToDesktop(view, (IComVirtualDesktop)desktop);
+        }
+
         private IEnumerable<IComVirtualDesktop> EnumerateVirtualDesktops()
         {
             VirtualDesktopManagerInternal.GetDesktops(out IComObjectArray desktops);
