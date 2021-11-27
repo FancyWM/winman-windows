@@ -6,6 +6,9 @@ using System.Runtime.InteropServices;
 using WinMan.Windows.Com;
 using WinMan.Windows.Com.Build21H2;
 
+using WinMan.Windows.DllImports;
+using static WinMan.Windows.DllImports.NativeMethods;
+
 namespace WinMan.Windows
 {
     internal class Win32VirtualDesktopService21H2 : IWin32VirtualDesktopService
@@ -41,7 +44,7 @@ namespace WinMan.Windows
             string desktopName = null;
             try
             {
-                desktopName = comDesktop.GetName();
+                desktopName = MarshalHSTRING(new(comDesktop.GetName()));
             }
             catch { }
 
@@ -51,6 +54,18 @@ namespace WinMan.Windows
                 desktopName = "Desktop " + (GetDesktopIndex(IntPtr.Zero, comDesktop) + 1).ToString();
             }
             return desktopName;
+        }
+
+        private string MarshalHSTRING(HSTRING hStr)
+        {
+            unsafe
+            {
+                uint length = 0;
+                PCWSTR pBuffer = WindowsGetStringRawBuffer(hStr, &length);
+                string str = new((char*)pBuffer, 0, (int)length);
+                NativeMethods.WindowsDeleteString(hStr);
+                return str;
+            }
         }
 
         public bool HasWindow(object desktop, IntPtr window)

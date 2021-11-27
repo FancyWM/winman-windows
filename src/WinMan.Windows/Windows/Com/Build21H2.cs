@@ -12,8 +12,7 @@ namespace WinMan.Windows.Com.Build21H2
 		bool IsViewVisible(IComApplicationView view);
 		Guid GetId();
 		IntPtr Unknown1();
-		[return: MarshalAs(UnmanagedType.HString)]
-		string GetName();
+		IntPtr GetName();
 		[return: MarshalAs(UnmanagedType.HString)]
 		string GetWallpaperPath();
 	}
