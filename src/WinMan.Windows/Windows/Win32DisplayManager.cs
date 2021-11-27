@@ -168,14 +168,7 @@ namespace WinMan.Windows
 
         private bool IsVisibleMonitor(IntPtr hMonitor)
         {
-            try
-            {
-                return (GetMonitorInfo(hMonitor).dwFlags & DISPLAY_DEVICE_MIRRORING_DRIVER) == 0;
-            }
-            catch (Win32Exception e) when (e.IsInvalidMonitorHandleException())
-            {
-                throw new InvalidDisplayReferenceException(hMonitor);
-            }
+            return (GetMonitorInfo(hMonitor).dwFlags & DISPLAY_DEVICE_MIRRORING_DRIVER) == 0;
         }
 
         internal (string deviceName, Rectangle workArea, Rectangle bounds, double dpiScale, int refreshRate) GetMonitorSettings(IntPtr hMonitor)
@@ -191,7 +184,7 @@ namespace WinMan.Windows
                     dpiScale,
                     refreshRate: (int)devMode.dmDisplayFrequency);
             }
-            catch (Win32Exception e) when (e.IsInvalidMonitorHandleException())
+            catch (Win32Exception e) when (e.IsInvalidMonitorHandleException() || !IsMonitorValid(hMonitor))
             {
                 throw new InvalidDisplayReferenceException(hMonitor);
             }
@@ -224,7 +217,7 @@ namespace WinMan.Windows
                     NT_6_3.GetDpiForMonitor(new(hMonitor), MONITOR_DPI_TYPE.MDT_EFFECTIVE_DPI, out uint dpiX, out _);
                     return dpiX / 96.0;
                 }
-                catch (Win32Exception e) when (e.IsInvalidMonitorHandleException())
+                catch (Win32Exception e) when (e.IsInvalidMonitorHandleException() || !IsMonitorValid(hMonitor))
                 {
                     throw new InvalidDisplayReferenceException(hMonitor);
                 }
@@ -246,7 +239,7 @@ namespace WinMan.Windows
                 {
                     throw new Win32Exception();
                 }
-                catch (Win32Exception e) when (e.IsInvalidMonitorHandleException())
+                catch (Win32Exception e) when (e.IsInvalidMonitorHandleException() || !IsMonitorValid(hMonitor))
                 {
                     throw new InvalidDisplayReferenceException(hMonitor, e);
                 }
@@ -268,7 +261,7 @@ namespace WinMan.Windows
                     {
                         throw new Win32Exception();
                     }
-                    catch (Win32Exception e) when (e.IsInvalidMonitorHandleException())
+                    catch (Win32Exception e) when (e.IsInvalidMonitorHandleException() || !IsMonitorValid(hMonitor))
                     {
                         throw new InvalidDisplayReferenceException(hMonitor, e);
                     }
@@ -285,12 +278,19 @@ namespace WinMan.Windows
             DEVMODEW devMode = default;
             if (!EnumDisplaySettings(device, ENUM_DISPLAY_SETTINGS_MODE.ENUM_CURRENT_SETTINGS, ref devMode))
             {
-                // GetMonitorInfo will throw InvalidDisplayReferenceException if the HMONITOR is dead.
-                GetMonitorInfo(hMonitor);
+                if (!IsMonitorValid(hMonitor))
+                {
+                    throw new InvalidDisplayReferenceException(hMonitor);
+                }
                 throw new Win32Exception("Couldn't read the monitor settings.");
             }
 
             return (mi, device, devMode);
+        }
+
+        private bool IsMonitorValid(IntPtr hMonitor)
+        {
+            return GetMonitors().Contains(hMonitor);
         }
     }
 }
