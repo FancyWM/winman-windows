@@ -2,7 +2,7 @@
 using System;
 using System.Runtime.InteropServices;
 
-namespace WinMan.Windows.Com.Build21H2
+namespace WinMan.Windows.Com.Build22000
 {
 	[ComImport]
 	[InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]

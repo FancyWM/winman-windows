@@ -90,28 +90,28 @@ namespace WinMan.Windows
 
                 IVirtualDesktopManager Init()
                 {
-                    IWin32VirtualDesktopService vds = null;
-                    try
+                    var osBuild = Environment.OSVersion.Version.Build;
+                    if (osBuild < 17661)
                     {
-                        vds = new Win32VirtualDesktopService1809();
-                    }
-                    catch
-                    {
-                        try
-                        {
-                            vds = new Win32VirtualDesktopService21H2();
-                        }
-                        catch
-                        {
-                        }
+                        return new DummyVirtualDesktopManager(this);
                     }
 
-                    if (vds != null)
+                    IWin32VirtualDesktopService vds;
+                    if (osBuild >= 22449)
                     {
-                        // TODO: Pass HMONITOR
-                        return new Win32VirtualDesktopManager(this, vds, IntPtr.Zero);
+                        vds = new Win32VirtualDesktopService22449();
                     }
-                    return new DummyVirtualDesktopManager(this);
+                    else if (osBuild >= 22000)
+                    {
+                        vds = new Win32VirtualDesktopService22000();
+                    }
+                    else
+                    {
+                        vds = new Win32VirtualDesktopService17661();
+                    }
+
+                    // TODO: Pass HMONITOR
+                    return new Win32VirtualDesktopManager(this, vds, IntPtr.Zero);
                 }
 
                 if (m_virtualDesktops == null)
