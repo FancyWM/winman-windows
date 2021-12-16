@@ -1,9 +1,33 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net5.0</TargetFramework>
+    <TargetFramework>net5.0-windows7.0</TargetFramework>
 
     <Nullable>enable</Nullable>
+
+    <GeneratePackageOnBuild>True</GeneratePackageOnBuild>
+
+    <Authors>FancyWM,veselink1</Authors>
+
+    <Description>A platform-agnostic event-based window management library for .NET (Windows/Win32 implementation)</Description>
+
+    <PackageProjectUrl>https://github.com/FancyWM/winman-windows</PackageProjectUrl>
+
+    <PackageIcon>Icon.png</PackageIcon>
+
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+
+    <RepositoryUrl>https://github.com/FancyWM/winman-windows</RepositoryUrl>
+
+    <RepositoryType>git</RepositoryType>
+
+    <PackageTags>win32 windows shell window manager</PackageTags>
+
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+
+    <PackageRequireLicenseAcceptance>True</PackageRequireLicenseAcceptance>
+
+    <SupportedOSPlatformVersion>7.0</SupportedOSPlatformVersion>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|AnyCPU'">
@@ -15,15 +39,22 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="docfx.console" Version="2.57.2">
-      <PrivateAssets>all</PrivateAssets>
-      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
-    </PackageReference>
-    <PackageReference Include="Microsoft.Win32.Registry" Version="5.0.0" />
+    <None Include="..\..\README.md">
+      <Pack>True</Pack>
+      <PackagePath>\</PackagePath>
+    </None>
+    <None Include="..\..\Resources\Icon.png">
+      <Pack>True</Pack>
+      <PackagePath>\</PackagePath>
+    </None>
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\..\WinMan\src\WinMan\WinMan.csproj" />
+    <PackageReference Include="Microsoft.Win32.Registry" Version="5.0.0" />
+    <PackageReference Include="WinMan.Core" Version="1.0.1" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\WinMan.Windows.DllImports\WinMan.Windows.DllImports.csproj" />
   </ItemGroup>
 
