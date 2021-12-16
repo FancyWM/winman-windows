@@ -854,7 +854,7 @@ namespace WinMan.Windows
                 return defaultValue;
             }
             // TODO(veselink1): Basically, anything can timeout...
-            catch (Win32Exception e) when (e.IsInvalidWindowHandleException())
+            catch (Win32Exception e) when (e.IsInvalidWindowHandleException() || e.IsAccessDeniedException())
             {
                 return defaultValue;
             }
