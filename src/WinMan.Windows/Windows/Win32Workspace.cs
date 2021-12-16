@@ -225,7 +225,7 @@ namespace WinMan.Windows
         public IWindow? FindWindow(IntPtr windowHandle)
         {
             CheckOpen();
-            Win32WindowHandle handle;
+            Win32WindowHandle? handle;
             lock (m_windowList)
             {
                 handle = m_windowList.FirstOrDefault(x => x.Handle == windowHandle);
@@ -308,7 +308,7 @@ namespace WinMan.Windows
 
         internal IWindow? UnsafeGetWindow(IntPtr hwnd)
         {
-            Win32WindowHandle window;
+            Win32WindowHandle? window;
             lock (m_windowList)
             {
                 window = m_windowList.FirstOrDefault(x => x.Handle == hwnd);
@@ -320,7 +320,7 @@ namespace WinMan.Windows
             return null;
         }
 
-        private void OnProcessingLoopException(object sender, UnhandledExceptionEventArgs e)
+        private void OnProcessingLoopException(object? sender, UnhandledExceptionEventArgs e)
         {
             var ex = (Exception)e.ExceptionObject;
             if (ex.IsInvalidWindowHandleException())
@@ -495,7 +495,7 @@ namespace WinMan.Windows
                 return;
             }
 
-            Win32WindowHandle window;
+            Win32WindowHandle? window;
 
             switch (eventType)
             {
@@ -621,7 +621,7 @@ namespace WinMan.Windows
 
         private void OnWindowDestroyed(IntPtr hwnd)
         {
-            if (m_windowSet.TryGetValue(hwnd, out Win32WindowHandle window))
+            if (m_windowSet.TryGetValue(hwnd, out Win32WindowHandle? window))
             {
                 m_windowSet.Remove(hwnd);
 

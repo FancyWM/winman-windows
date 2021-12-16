@@ -54,7 +54,7 @@ namespace WinMan.Windows
             return "DummyVirtualDesktop { IsCurrent = true }";
         }
 
-        public override bool Equals(object obj)
+        public override bool Equals(object? obj)
         {
             return obj is DummyVirtualDesktop;
         }

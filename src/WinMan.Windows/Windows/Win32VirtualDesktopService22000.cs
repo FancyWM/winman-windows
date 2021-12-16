@@ -19,9 +19,11 @@ namespace WinMan.Windows
 
         public Win32VirtualDesktopService22000()
         {
-            var shell = (IComServiceProvider10)Activator.CreateInstance(Type.GetTypeFromCLSID(ComGuids.CLSID_ImmersiveShell));
+            var shell = (IComServiceProvider10?)Activator.CreateInstance(Type.GetTypeFromCLSID(ComGuids.CLSID_ImmersiveShell, true)!)
+                ?? throw new COMException($"Failed to create instance of {ComGuids.CLSID_ImmersiveShell}");
             VirtualDesktopManagerInternal = (IComVirtualDesktopManagerInternal)shell.QueryService(ComGuids.CLSID_VirtualDesktopManagerInternal, typeof(IComVirtualDesktopManagerInternal).GUID);
-            VirtualDesktopManager = (IComVirtualDesktopManager)Activator.CreateInstance(Type.GetTypeFromCLSID(ComGuids.CLSID_VirtualDesktopManager));
+            VirtualDesktopManager = (IComVirtualDesktopManager?)Activator.CreateInstance(Type.GetTypeFromCLSID(ComGuids.CLSID_VirtualDesktopManager, true)!)
+                ?? throw new COMException($"Failed to create instance of {ComGuids.CLSID_VirtualDesktopManager}");
             ApplicationViewCollection = (IComApplicationViewCollection)shell.QueryService(typeof(IComApplicationViewCollection).GUID, typeof(IComApplicationViewCollection).GUID);
             VirtualDesktopPinnedApps = (IComVirtualDesktopPinnedApps)shell.QueryService(ComGuids.CLSID_VirtualDesktopPinnedApps, typeof(IComVirtualDesktopPinnedApps).GUID);
         }
@@ -40,7 +42,7 @@ namespace WinMan.Windows
         {
             IComVirtualDesktop comDesktop = (IComVirtualDesktop)desktop;
             // get desktop name
-            string desktopName = null;
+            string? desktopName = null;
             try
             {
                 desktopName = new HSTRING(comDesktop.GetName()).MarshalIntoString();

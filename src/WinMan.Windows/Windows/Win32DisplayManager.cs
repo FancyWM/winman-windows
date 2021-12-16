@@ -15,7 +15,9 @@ namespace WinMan.Windows
         // TODO: Implements hotplug detection
         public event EventHandler<DisplayChangedEventArgs>? Added;
         public event EventHandler<DisplayChangedEventArgs>? Removed;
+#pragma warning disable CS0067
         public event EventHandler<DisplayRectangleChangedEventArgs>? VirtualDisplayBoundsChanged;
+#pragma warning restore CS0067
         public event EventHandler<PrimaryDisplayChangedEventArgs>? PrimaryDisplayChanged;
 
         private static readonly bool IsPerMonitorDPISupported = Environment.OSVersion.Version.Major > 6

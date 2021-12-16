@@ -11,15 +11,18 @@ namespace WinMan.Windows
     internal class Win32VirtualDesktopService17661 : IWin32VirtualDesktopService
     {
         private readonly IComVirtualDesktopManagerInternal VirtualDesktopManagerInternal;
-        private readonly IComVirtualDesktopManager? VirtualDesktopManager;
+        private readonly IComVirtualDesktopManager VirtualDesktopManager;
         private readonly IComApplicationViewCollection ApplicationViewCollection;
         private readonly IComVirtualDesktopPinnedApps VirtualDesktopPinnedApps;
 
         public Win32VirtualDesktopService17661()
         {
-            var shell = (IComServiceProvider10)Activator.CreateInstance(Type.GetTypeFromCLSID(ComGuids.CLSID_ImmersiveShell));
-            VirtualDesktopManagerInternal = (IComVirtualDesktopManagerInternal)shell.QueryService(ComGuids.CLSID_VirtualDesktopManagerInternal, typeof(IComVirtualDesktopManagerInternal).GUID);
-            VirtualDesktopManager = (IComVirtualDesktopManager)Activator.CreateInstance(Type.GetTypeFromCLSID(ComGuids.CLSID_VirtualDesktopManager));
+            var shell = (IComServiceProvider10?)Activator.CreateInstance(Type.GetTypeFromCLSID(ComGuids.CLSID_ImmersiveShell, true)!) 
+                ?? throw new COMException($"Failed to create instance of {ComGuids.CLSID_ImmersiveShell}");
+            VirtualDesktopManagerInternal = (IComVirtualDesktopManagerInternal?)shell.QueryService(ComGuids.CLSID_VirtualDesktopManagerInternal, typeof(IComVirtualDesktopManagerInternal).GUID)
+                ?? throw new COMException($"Failed to create instance of {ComGuids.CLSID_VirtualDesktopManagerInternal}");
+            VirtualDesktopManager = (IComVirtualDesktopManager?)Activator.CreateInstance(Type.GetTypeFromCLSID(ComGuids.CLSID_VirtualDesktopManager, true)!)
+                ?? throw new COMException($"Failed to create instance of {ComGuids.CLSID_VirtualDesktopManager}");
             ApplicationViewCollection = (IComApplicationViewCollection)shell.QueryService(typeof(IComApplicationViewCollection).GUID, typeof(IComApplicationViewCollection).GUID);
             VirtualDesktopPinnedApps = (IComVirtualDesktopPinnedApps)shell.QueryService(ComGuids.CLSID_VirtualDesktopPinnedApps, typeof(IComVirtualDesktopPinnedApps).GUID);
         }
@@ -41,10 +44,10 @@ namespace WinMan.Windows
             Guid guid = comDesktop.GetId();
 
             // read desktop name in registry
-            string desktopName = null;
+            string? desktopName = null;
             try
             {
-                desktopName = (string)Microsoft.Win32.Registry.GetValue("HKEY_CURRENT_USER\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\VirtualDesktops\\Desktops\\{" + guid.ToString() + "}", "Name", null);
+                desktopName = (string?)Microsoft.Win32.Registry.GetValue("HKEY_CURRENT_USER\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\VirtualDesktops\\Desktops\\{" + guid.ToString() + "}", "Name", null);
             }
             catch { }
 

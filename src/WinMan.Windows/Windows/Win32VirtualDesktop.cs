@@ -44,7 +44,7 @@ namespace WinMan.Windows
             m_vds.SwitchToDesktop(m_hMon, m_desktop);
         }
 
-        public override bool Equals(object obj)
+        public override bool Equals(object? obj)
         {
             return obj is Win32VirtualDesktop desktop &&
                    m_desktop.Equals(desktop.m_desktop);

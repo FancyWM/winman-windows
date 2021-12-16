@@ -344,12 +344,12 @@ namespace WinMan.Windows
             return Process.GetProcessById((int)processId);
         }
 
-        public override bool Equals(object obj)
+        public override bool Equals(object? obj)
         {
             return obj is Win32Window win && win.m_hwnd == m_hwnd;
         }
 
-        public bool Equals(IWindow other)
+        public bool Equals(IWindow? other)
         {
             return other is Win32Window win && win.m_hwnd == m_hwnd;
         }

@@ -13,7 +13,7 @@ namespace WinMan.Windows
 
         public event EventHandler<DisplayScalingChangedEventArgs>? ScalingChanged;
 
-        public event EventHandler<DisplayRefreshRateChangedEventArgs?> RefreshRateChanged;
+        public event EventHandler<DisplayRefreshRateChangedEventArgs>? RefreshRateChanged;
 
         public Rectangle WorkArea
         {
@@ -154,7 +154,7 @@ namespace WinMan.Windows
             Removed?.Invoke(this, new DisplayChangedEventArgs(this));
         }
 
-        public override bool Equals(object obj)
+        public override bool Equals(object? obj)
         {
             return obj is Win32Display display &&
                    EqualityComparer<IntPtr>.Default.Equals(Handle, display.Handle);
