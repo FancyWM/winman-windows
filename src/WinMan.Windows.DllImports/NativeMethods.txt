@@ -40,6 +40,8 @@ SetWinEventHook
 SetWindowLong
 SetWindowPos
 ShowWindow
+WindowsGetStringRawBuffer
+WindowsDeleteString
 
 WM_DISPLAYCHANGE
 WM_GETMINMAXINFO
