@@ -5,7 +5,6 @@ using System.Linq;
 using System.Runtime.InteropServices;
 
 using WinMan.Windows.DllImports;
-using WinMan.Windows.Windows;
 
 using static WinMan.Windows.DllImports.NativeMethods;
 

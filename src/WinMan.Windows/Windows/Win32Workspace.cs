@@ -11,7 +11,6 @@ using WinMan.Windows.Utilities;
 using WinMan.Windows.DllImports;
 using static WinMan.Windows.DllImports.Constants;
 using static WinMan.Windows.DllImports.NativeMethods;
-using WinMan.Windows.Windows;
 
 namespace WinMan.Windows
 {

@@ -1,8 +1,6 @@
 ﻿using System;
 using System.Runtime.InteropServices;
 
-using WinMan.Windows.Windows;
-
 namespace WinMan.Windows
 {
     public class Win32VirtualDesktop : IVirtualDesktop
