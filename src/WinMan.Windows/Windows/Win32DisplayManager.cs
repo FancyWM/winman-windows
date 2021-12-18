@@ -76,7 +76,7 @@ namespace WinMan.Windows
                     return true;
                 }, new LPARAM()))
                 {
-                    throw new Win32Exception();
+                    throw new Win32Exception().WithMessage("Could not enumerate the display monitors attached to the system!");
                 }
             }
             return monitors;
@@ -239,7 +239,7 @@ namespace WinMan.Windows
             {
                 try
                 {
-                    throw new Win32Exception();
+                    throw new Win32Exception().WithMessage($"Could not read the monitor information for HMONITOR={hMonitor:X8}!");
                 }
                 catch (Win32Exception e) when (e.IsInvalidMonitorHandleException() || !IsMonitorValid(hMonitor))
                 {
@@ -261,7 +261,7 @@ namespace WinMan.Windows
                 {
                     try
                     {
-                        throw new Win32Exception();
+                        throw new Win32Exception().WithMessage($"Could not read the monitor information for HMONITOR={hMonitor:X8}!");
                     }
                     catch (Win32Exception e) when (e.IsInvalidMonitorHandleException() || !IsMonitorValid(hMonitor))
                     {
@@ -284,7 +284,7 @@ namespace WinMan.Windows
                 {
                     throw new InvalidDisplayReferenceException(hMonitor);
                 }
-                throw new Win32Exception("Couldn't read the monitor settings.");
+                throw new Win32Exception($"Could not read the settings for monitor \"{device}\".");
             }
 
             return (mi, device, devMode);

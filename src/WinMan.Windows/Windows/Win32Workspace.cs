@@ -323,7 +323,7 @@ namespace WinMan.Windows
         private void OnProcessingLoopException(object? sender, UnhandledExceptionEventArgs e)
         {
             var ex = (Exception)e.ExceptionObject;
-            if (ex.IsInvalidWindowHandleException())
+            if (ex is Win32Exception win32Ex && win32Ex.IsInvalidWindowHandleException())
             {
                 try
                 {
@@ -388,7 +388,7 @@ namespace WinMan.Windows
             m_hTimerRecent = SetTimer(new(m_msgWnd), IdtRecentTimerWatch, 10, null);
             if (m_hTimer == UIntPtr.Zero || m_hTimerRecent == UIntPtr.Zero)
             {
-                throw new Win32Exception();
+                throw new Win32Exception().WithMessage("Could not create a timer for the message-only window!");
             }
 
             while (!m_isShuttingDown && GetMessage(out MSG msg, new(m_msgWnd), 0, 0))
@@ -733,7 +733,7 @@ namespace WinMan.Windows
         {
             if (!GetCursorPos(out POINT pt))
             {
-                throw new Win32Exception();
+                throw new Win32Exception().WithMessage("Could not read the position of the cursor!");
             }
             return new Point(pt.x, pt.y);
         }
@@ -835,7 +835,7 @@ namespace WinMan.Windows
 
             if (!success)
             {
-                throw new Win32Exception();
+                throw new Win32Exception().WithMessage("Could not enumerate the application windows!");
             }
 
             return windows;

@@ -21,6 +21,7 @@ GetParent
 GetShellWindow
 GetSystemMetrics
 GetWindow
+GetClassName
 GetWindowLong
 GetWindowPlacement
 GetWindowRect
@@ -69,6 +70,8 @@ ERROR_SUCCESS
 ERROR_INVALID_HANDLE
 ERROR_INVALID_WINDOW_HANDLE
 ERROR_INVALID_MONITOR_HANDLE
+ERROR_TIMEOUT
+ERROR_BAD_COMMAND
 
 STM_SETICON
 

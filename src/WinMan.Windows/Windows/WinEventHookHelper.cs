@@ -32,7 +32,7 @@ namespace WinMan.Windows
             IntPtr hHook = SetWinEventHook(min, max, IntPtr.Zero, callback, idProcess: 0, idThread: 0, WINEVENT_OUTOFCONTEXT);
             if (IntPtr.Zero == hHook)
             {
-                throw new Win32Exception();
+                throw new Win32Exception().WithMessage("Could not set a window message event hook!");
             }
 
             return new Deleter(() =>

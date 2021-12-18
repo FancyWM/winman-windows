@@ -113,8 +113,6 @@ namespace WinMan.Windows
 
         internal bool IsTopLevelVisible => GetIsTopLevelVisible(m_workspace, m_hwnd);
 
-        private const string InvalidHandleTitle = "[Invalid handle]";
-
         private readonly object m_syncRoot = new object();
 
         /// <summary>
@@ -164,7 +162,7 @@ namespace WinMan.Windows
             m_hwnd = hwnd;
             m_isDead = false;
             m_oldHwndPrev = GetPreviousWindow()?.Handle ?? IntPtr.Zero;
-            m_title = GetTitle(throwOnError: true);
+            m_title = GetTitle();
         }
 
         public void Close()
@@ -172,7 +170,7 @@ namespace WinMan.Windows
             if (!CloseWindow(new(m_hwnd)))
             {
                 CheckAlive();
-                throw new Win32Exception();
+                throw new Win32Exception().WithMessage($"Could not close {this}!");
             }
         }
 
@@ -203,6 +201,7 @@ namespace WinMan.Windows
             if (!SetWindowPos(new(m_hwnd), new(), position.Left, position.Top, position.Width, position.Height, flags))
             {
                 CheckAlive();
+                throw new Win32Exception().WithMessage($"Could not update the position of {this}");
             }
             else
             {
@@ -361,7 +360,20 @@ namespace WinMan.Windows
 
         public override string ToString()
         {
-            return UseDefaults(() => $"[{m_hwnd}]: \"{Title}\"", "[Invalid window]");
+            string className;
+            try
+            {
+                className = GetClass();
+            }
+            catch (InvalidWindowReferenceException)
+            {
+                className = "Invalid handle";
+            }
+            catch (Win32Exception e)
+            {
+                className = $"Error code {e.ErrorCode:X8}";
+            }
+            return $"{{{m_hwnd:X8}: {className}}}";
         }
 
         internal void OnMoveSizeStart()
@@ -429,7 +441,16 @@ namespace WinMan.Windows
 
         internal void OnTitleChange()
         {
-            var newTitle = GetTitle(throwOnError: false);
+            string newTitle;
+            try
+            {
+                newTitle = GetTitle();
+            }
+            catch (Win32Exception)
+            {
+                return;
+            }
+
             string oldTitle;
             lock (m_syncRoot)
             {
@@ -495,7 +516,7 @@ namespace WinMan.Windows
             }
         }
 
-        private string GetTitle(bool throwOnError)
+        private string GetTitle()
         {
             unsafe
             {
@@ -506,11 +527,28 @@ namespace WinMan.Windows
                     nuint result = 0;
                     if (new LRESULT() == SendMessageTimeout(new(m_hwnd), Constants.WM_GETTEXT, new((nuint)buffer.Length), new LPARAM((nint)pBuffer), flags, 3000, &result))
                     {
-                        if (throwOnError)
-                        {
-                            CheckAlive();
-                        }
-                        return InvalidHandleTitle;
+                        int err = Marshal.GetLastWin32Error();
+                        err = err == 0 ? (int)Constants.ERROR_TIMEOUT : err;
+                        CheckAlive();
+                        throw new Win32Exception(err).WithMessage($"WM_GETTEXT failed for window {this}");
+                    }
+                    return new string(pBuffer);
+                }
+            }
+        }
+
+        private string GetClass()
+        {
+            unsafe
+            {
+                char[] buffer = new char[256];
+                fixed (char* pBuffer = buffer)
+                {
+                    if (0 == GetClassName(new(m_hwnd), new(pBuffer), buffer.Length))
+                    {
+                        int err = Marshal.GetLastWin32Error();
+                        CheckAlive();
+                        throw new Win32Exception(err).WithMessage("GetClassName failed!");
                     }
                     return new string(pBuffer);
                 }
@@ -526,7 +564,7 @@ namespace WinMan.Windows
                 if (hr != 0)
                 {
                     CheckAlive();
-                    throw new Win32Exception(hr);
+                    throw new Win32Exception(hr).WithMessage($"DwmGetWindowAttribute(..., DWMWA_EXTENDED_FRAME_BOUNDS, ...) failed for {this}");
                 }
             }
 
@@ -561,7 +599,7 @@ namespace WinMan.Windows
             if (!SetWindowPos(new(hwnd), new(hwndAfter), 0, 0, 0, 0, flags))
             {
                 CheckAlive();
-                throw new Win32Exception();
+                throw new Win32Exception().WithMessage($"Could not change the Z-order of {this}!");
             }
         }
 
@@ -670,7 +708,7 @@ namespace WinMan.Windows
             if (!GetWindowPlacement(new HWND(m_hwnd), ref wplc))
             {
                 CheckAlive();
-                throw new Win32Exception();
+                throw new Win32Exception().WithMessage($"Could not read the placement of {this}");
             }
 
             return wplc;
@@ -694,7 +732,7 @@ namespace WinMan.Windows
             if (!GetWindowRect(new HWND(m_hwnd), out RECT rc))
             {
                 CheckAlive();
-                throw new Win32Exception();
+                throw new Win32Exception().WithMessage($"Could not get the bounding rectangle of {this}!");
             }
 
             return new Rectangle(rc.left, rc.top, rc.right, rc.bottom);
@@ -798,14 +836,14 @@ namespace WinMan.Windows
                     nuint result = 0;
                     if (new LRESULT() == SendMessageTimeout(new(Handle), Constants.WM_GETMINMAXINFO, new(), new(new IntPtr(&info)), flags, 3000, &result))
                     {
-                        if (Marshal.GetLastWin32Error() != 0)
-                        {
-                            throw new Win32Exception();
-                        }
+                        int err = Marshal.GetLastWin32Error();
+                        err = err == 0 ? (int)Constants.ERROR_TIMEOUT : err;
+                        throw new Win32Exception(err).WithMessage($"WM_GETMINMAXINFO failed for window {this}!");
                     }
+                    // If an application processes WM_GETMINMAXINFO if should return 0.
                     if (0 != result)
                     {
-                        throw new Win32Exception();
+                        throw new Win32Exception((int)Constants.ERROR_BAD_COMMAND).WithMessage($"{this} does not support WM_GETMINMAXINFO!");
                     }
                 }
 

@@ -28,6 +28,8 @@
     <PackageRequireLicenseAcceptance>True</PackageRequireLicenseAcceptance>
 
     <SupportedOSPlatformVersion>7.0</SupportedOSPlatformVersion>
+
+    <Version>1.0.1</Version>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|AnyCPU'">
@@ -55,7 +57,10 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\WinMan.Windows.DllImports\WinMan.Windows.DllImports.csproj" />
+    <ProjectReference Include="..\WinMan.Windows.DllImports\WinMan.Windows.DllImports.csproj">
+      <ReferenceOutputAssembly>true</ReferenceOutputAssembly>
+      <IncludeAssets>{ProjectName}.dll</IncludeAssets>
+    </ProjectReference>
   </ItemGroup>
 
 </Project>
