@@ -4,6 +4,8 @@ using System.ComponentModel;
 using System.Linq;
 using System.Runtime.InteropServices;
 
+using Microsoft.Win32;
+
 using WinMan.Windows.DllImports;
 using static WinMan.Windows.DllImports.Constants;
 using static WinMan.Windows.DllImports.NativeMethods;
@@ -50,6 +52,14 @@ namespace WinMan.Windows
         }
 
         public IWorkspace Workspace => m_workspace;
+
+        // Appears to be the device name used when the user is not logged in or
+        // for RDP connections. I could not find any documentation, and it appears
+        // that this device always returns a resoltion of 1024x768.
+        // I suspect it is also used when the graphics driver crashes.
+        private static readonly string VirtualDeviceName = "WinDisc";
+
+        private const int VirtualDeviceDefaultRefreshRate = 30;
 
         private readonly Win32Workspace m_workspace;
 
@@ -177,14 +187,14 @@ namespace WinMan.Windows
         {
             try
             {
-                var (mi, device, devMode) = GetMonitorInfoAndSettings(hMonitor);
+                var (mi, device, refreshRate) = GetMonitorInfoAndSettings(hMonitor);
                 var dpiScale = GetDpiScale(hMonitor);
                 return (
                     deviceName: device,
                     workArea: new Rectangle(mi.rcWork.left, mi.rcWork.top, mi.rcWork.right, mi.rcWork.bottom),
                     bounds: new Rectangle(mi.rcMonitor.left, mi.rcMonitor.top, mi.rcMonitor.right, mi.rcMonitor.bottom),
                     dpiScale,
-                    refreshRate: (int)devMode.dmDisplayFrequency);
+                    refreshRate);
             }
             catch (Win32Exception e) when (e.IsInvalidMonitorHandleException() || !IsMonitorValid(hMonitor))
             {
@@ -194,8 +204,8 @@ namespace WinMan.Windows
 
         private int GetRefreshRate(IntPtr hMonitor)
         {
-            var (_, _, devMode) = GetMonitorInfoAndSettings(hMonitor);
-            return (int)devMode.dmDisplayFrequency;
+            var (_, _, refreshRate) = GetMonitorInfoAndSettings(hMonitor);
+            return refreshRate;
         }
 
         private Rectangle GetWorkArea(IntPtr hMonitor)
@@ -274,7 +284,7 @@ namespace WinMan.Windows
             }
         }
 
-        private (MONITORINFO mi, string device, DEVMODEW devMode) GetMonitorInfoAndSettings(IntPtr hMonitor)
+        private (MONITORINFO mi, string device, int refreshRate) GetMonitorInfoAndSettings(IntPtr hMonitor)
         {
             var (mi, device) = GetMonitorInfoEx(hMonitor);
             DEVMODEW devMode = default;
@@ -284,15 +294,39 @@ namespace WinMan.Windows
                 {
                     throw new InvalidDisplayReferenceException(hMonitor);
                 }
-                throw new Win32Exception($"Could not read the settings for monitor \"{device}\".");
+                if (device == VirtualDeviceName)
+                {
+                    return (mi, device, GetVirtualMonitorRefreshRate());
+                }
+                else
+                {
+                    throw new Win32Exception($"Could not read the settings for monitor \"{device}\".");
+                }
             }
 
-            return (mi, device, devMode);
+            return (mi, device, (int)GetVirtualMonitorRefreshRate());
         }
 
         private bool IsMonitorValid(IntPtr hMonitor)
         {
             return GetMonitors().Contains(hMonitor);
+        }
+
+        private int GetVirtualMonitorRefreshRate()
+        {
+            try
+            {
+                using var rdpConfig = Registry.LocalMachine.OpenSubKey(@"SYSTEM\CurrentControlSet\Control\Terminal Server\WinStations");
+                var frameIntervalString = rdpConfig!.GetValue("DWMFRAMEINTERVAL", null)?.ToString();
+                if (frameIntervalString == null)
+                    return VirtualDeviceDefaultRefreshRate;
+                int frameInterval = int.Parse(frameIntervalString);
+                return (int)(1000.0 / frameInterval);
+            }
+            catch
+            {
+                return VirtualDeviceDefaultRefreshRate;
+            }
         }
     }
 }
