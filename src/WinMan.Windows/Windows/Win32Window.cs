@@ -162,7 +162,14 @@ namespace WinMan.Windows
             m_hwnd = hwnd;
             m_isDead = false;
             m_oldHwndPrev = GetPreviousWindow()?.Handle ?? IntPtr.Zero;
-            m_title = GetTitle();
+            try
+            {
+                m_title = GetTitle();
+            }
+            catch (Win32Exception e) when (e.IsTimeoutException())
+            {
+                m_title = GetClass() + " (Not Responding)";
+            }
         }
 
         public void Close()
@@ -201,7 +208,7 @@ namespace WinMan.Windows
             if (!SetWindowPos(new(m_hwnd), new(), position.Left, position.Top, position.Width, position.Height, flags))
             {
                 CheckAlive();
-                throw new Win32Exception().WithMessage($"Could not update the position of {this}");
+                // Never throw for other reasons here. (I think it sometimes fails sporadically.)
             }
             else
             {
@@ -447,6 +454,10 @@ namespace WinMan.Windows
                 newTitle = GetTitle();
             }
             catch (Win32Exception)
+            {
+                return;
+            }
+            catch (InvalidWindowReferenceException)
             {
                 return;
             }
@@ -762,9 +773,9 @@ namespace WinMan.Windows
                 return;
             }
 
-            UpdatePositionAndNotify(placement);
-            UpdateStateAndNotify(state);
             UpdateTopmostAndNotify(isTopmost);
+            UpdateStateAndNotify(state);
+            UpdatePositionAndNotify(placement);
         }
 
         private bool CloseMatch(Rectangle rectA, Rectangle rectB, int threshold)
@@ -891,8 +902,7 @@ namespace WinMan.Windows
             {
                 return defaultValue;
             }
-            // TODO(veselink1): Basically, anything can timeout...
-            catch (Win32Exception e) when (e.IsInvalidWindowHandleException() || e.IsAccessDeniedException())
+            catch (Win32Exception e) when (e.IsInvalidWindowHandleException() || e.IsAccessDeniedException() || e.IsTimeoutException())
             {
                 return defaultValue;
             }
