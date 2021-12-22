@@ -170,6 +170,10 @@ namespace WinMan.Windows
             {
                 m_title = GetClass() + " (Not Responding)";
             }
+            catch (Win32Exception)
+            {
+                m_title = "";
+            }
         }
 
         public void Close()
