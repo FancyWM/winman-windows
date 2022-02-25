@@ -13,6 +13,8 @@ namespace WinMan.Windows
     [DebuggerDisplay("Handle = {Handle}, Title = {Title}")]
     public class Win32Window : IWindow
     {
+        private delegate void RaiseEvent();
+
         public event EventHandler<WindowChangedEventArgs>? Added;
         public event EventHandler<WindowChangedEventArgs>? Removed;
         public event EventHandler<WindowChangedEventArgs>? Destroyed;
@@ -23,6 +25,7 @@ namespace WinMan.Windows
         public event EventHandler<WindowPositionChangedEventArgs>? PositionChangeStart;
         public event EventHandler<WindowPositionChangedEventArgs>? PositionChangeEnd;
         public event EventHandler<WindowPositionChangedEventArgs>? PositionChanged;
+
         public event EventHandler<WindowStateChangedEventArgs>? StateChanged;
         public event EventHandler<WindowTopmostChangedEventArgs>? TopmostChanged;
         public event EventHandler<WindowTitleChangedEventArgs>? TitleChanged;
@@ -111,6 +114,8 @@ namespace WinMan.Windows
 
         public Rectangle FrameMargins => UseDefaults(() => GetFrameMargins(), default);
 
+        public string ClassName => UseDefaults(() => GetClassName(), "");
+
         internal bool IsTopLevelVisible => GetIsTopLevelVisible(m_workspace, m_hwnd);
 
         private readonly object m_syncRoot = new object();
@@ -168,7 +173,7 @@ namespace WinMan.Windows
             }
             catch (Win32Exception e) when (e.IsTimeoutException())
             {
-                m_title = GetClass() + " (Not Responding)";
+                m_title = GetClassName() + " (Not Responding)";
             }
             catch (Win32Exception)
             {
@@ -216,7 +221,7 @@ namespace WinMan.Windows
             }
             else
             {
-                UpdatePositionAndNotify(position);
+                UpdatePositionAndNotify(position)?.Invoke();
             }
         }
 
@@ -254,7 +259,7 @@ namespace WinMan.Windows
                     CheckAlive();
                 }
 
-                UpdateStateAndNotify(state);
+                UpdateStateAndNotify(state)?.Invoke();
             }
             catch (Win32Exception e) when (!e.IsInvalidWindowHandleException())
             {
@@ -272,7 +277,7 @@ namespace WinMan.Windows
                 IntPtr hwndAfter = topmost ? new IntPtr(-1) : new IntPtr(0);
                 InsertAfter(Handle, hwndAfter);
 
-                UpdateTopmostAndNotify(topmost);
+                UpdateTopmostAndNotify(topmost)?.Invoke();
             }
             catch (Win32Exception e) when (e.IsInvalidWindowHandleException())
             {
@@ -374,7 +379,7 @@ namespace WinMan.Windows
             string className;
             try
             {
-                className = GetClass();
+                className = GetClassName();
             }
             catch (InvalidWindowReferenceException)
             {
@@ -552,14 +557,14 @@ namespace WinMan.Windows
             }
         }
 
-        private string GetClass()
+        private string GetClassName()
         {
             unsafe
             {
                 char[] buffer = new char[256];
                 fixed (char* pBuffer = buffer)
                 {
-                    if (0 == GetClassName(new(m_hwnd), new(pBuffer), buffer.Length))
+                    if (0 == NativeMethods.GetClassName(new(m_hwnd), new(pBuffer), buffer.Length))
                     {
                         int err = Marshal.GetLastWin32Error();
                         CheckAlive();
@@ -776,10 +781,15 @@ namespace WinMan.Windows
                 m_isDead = true;
                 return;
             }
+            
+            // Carry all of the updates, then notify!
+            var raiseTopmostChanged = UpdateTopmostAndNotify(isTopmost);
+            var raiseStateChanged = UpdateStateAndNotify(state);
+            var raisePositionChanged = UpdatePositionAndNotify(placement);
 
-            UpdateTopmostAndNotify(isTopmost);
-            UpdateStateAndNotify(state);
-            UpdatePositionAndNotify(placement);
+            raiseTopmostChanged?.Invoke();
+            raiseStateChanged?.Invoke();
+            raisePositionChanged?.Invoke();
         }
 
         private bool CloseMatch(Rectangle rectA, Rectangle rectB, int threshold)
@@ -790,7 +800,7 @@ namespace WinMan.Windows
                 && Math.Abs(rectA.Bottom - rectB.Bottom) <= threshold;
         }
 
-        private void UpdatePositionAndNotify(Rectangle newPosition)
+        private RaiseEvent? UpdatePositionAndNotify(Rectangle newPosition)
         {
             Rectangle oldPosition;
             lock (m_syncRoot)
@@ -801,11 +811,12 @@ namespace WinMan.Windows
 
             if (oldPosition != newPosition)
             {
-                PositionChanged?.Invoke(this, new WindowPositionChangedEventArgs(this, newPosition, oldPosition));
+                return () => PositionChanged?.Invoke(this, new WindowPositionChangedEventArgs(this, newPosition, oldPosition));
             }
+            return null;
         }
 
-        private void UpdateStateAndNotify(WindowState newState)
+        private RaiseEvent? UpdateStateAndNotify(WindowState newState)
         {
             WindowState oldState;
             lock (m_syncRoot)
@@ -816,11 +827,12 @@ namespace WinMan.Windows
 
             if (oldState != newState)
             {
-                StateChanged?.Invoke(this, new WindowStateChangedEventArgs(this, newState, oldState));
+                return () => StateChanged?.Invoke(this, new WindowStateChangedEventArgs(this, newState, oldState));
             }
+            return null;
         }
 
-        private void UpdateTopmostAndNotify(bool newIsTopmost)
+        private RaiseEvent? UpdateTopmostAndNotify(bool newIsTopmost)
         {
             bool oldIsTopmost;
             lock (m_syncRoot)
@@ -831,8 +843,9 @@ namespace WinMan.Windows
 
             if (oldIsTopmost != newIsTopmost)
             {
-                TopmostChanged?.Invoke(this, new WindowTopmostChangedEventArgs(this, newIsTopmost));
+                return () => TopmostChanged?.Invoke(this, new WindowTopmostChangedEventArgs(this, newIsTopmost));
             }
+            return null;
         }
 
         private (Point? minSize, Point? maxSize) GetMinMaxSize()
@@ -858,7 +871,7 @@ namespace WinMan.Windows
                     // If an application processes WM_GETMINMAXINFO if should return 0.
                     if (0 != result)
                     {
-                        throw new Win32Exception((int)Constants.ERROR_BAD_COMMAND).WithMessage($"{this} does not support WM_GETMINMAXINFO!");
+                        return (null, null);
                     }
                 }
 
