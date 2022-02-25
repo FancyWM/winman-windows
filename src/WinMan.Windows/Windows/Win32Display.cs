@@ -152,6 +152,16 @@ namespace WinMan.Windows
         internal void OnRemoved()
         {
             Removed?.Invoke(this, new DisplayChangedEventArgs(this));
+            Removed = null;
+            WorkAreaChanged = null;
+            BoundsChanged = null;
+            ScalingChanged = null;
+            RefreshRateChanged = null;
+        }
+
+        public bool Equals(IDisplay? other)
+        {
+            return Equals((object?)other);
         }
 
         public override bool Equals(object? obj)

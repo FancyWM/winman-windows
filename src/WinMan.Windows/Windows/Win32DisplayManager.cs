@@ -123,7 +123,7 @@ namespace WinMan.Windows
                 }
 
                 newPrimaryDisplay = m_displays.First(x => x.Bounds.TopLeft == new Point(0, 0));
-                if (oldPrimaryDisplay != newPrimaryDisplay)
+                if (!oldPrimaryDisplay.Equals(newPrimaryDisplay))
                 {
                     PrimaryDisplay = newPrimaryDisplay;
                 }
@@ -157,7 +157,7 @@ namespace WinMan.Windows
             }
             finally
             {
-                if (oldPrimaryDisplay != newPrimaryDisplay)
+                if (!oldPrimaryDisplay.Equals(newPrimaryDisplay))
                 {
                     PrimaryDisplayChanged?.Invoke(this, new PrimaryDisplayChangedEventArgs(newPrimaryDisplay, oldPrimaryDisplay));
                 }
