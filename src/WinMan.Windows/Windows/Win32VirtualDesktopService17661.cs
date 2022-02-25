@@ -10,14 +10,19 @@ namespace WinMan.Windows
 {
     internal class Win32VirtualDesktopService17661 : IWin32VirtualDesktopService
     {
-        private readonly IComVirtualDesktopManagerInternal VirtualDesktopManagerInternal;
-        private readonly IComVirtualDesktopManager VirtualDesktopManager;
-        private readonly IComApplicationViewCollection ApplicationViewCollection;
-        private readonly IComVirtualDesktopPinnedApps VirtualDesktopPinnedApps;
+        private IComVirtualDesktopManagerInternal VirtualDesktopManagerInternal;
+        private IComVirtualDesktopManager VirtualDesktopManager;
+        private IComApplicationViewCollection ApplicationViewCollection;
+        private IComVirtualDesktopPinnedApps VirtualDesktopPinnedApps;
 
         public Win32VirtualDesktopService17661()
         {
-            var shell = (IComServiceProvider10?)Activator.CreateInstance(Type.GetTypeFromCLSID(ComGuids.CLSID_ImmersiveShell, true)!) 
+            Connect();
+        }
+
+        public void Connect()
+        {
+            var shell = (IComServiceProvider10?)Activator.CreateInstance(Type.GetTypeFromCLSID(ComGuids.CLSID_ImmersiveShell, true)!)
                 ?? throw new COMException($"Failed to create instance of {ComGuids.CLSID_ImmersiveShell}");
             VirtualDesktopManagerInternal = (IComVirtualDesktopManagerInternal?)shell.QueryService(ComGuids.CLSID_VirtualDesktopManagerInternal, typeof(IComVirtualDesktopManagerInternal).GUID)
                 ?? throw new COMException($"Failed to create instance of {ComGuids.CLSID_VirtualDesktopManagerInternal}");

@@ -5,6 +5,8 @@ namespace WinMan.Windows
 {
     internal interface IWin32VirtualDesktopService
     {
+        void Connect();
+
         int GetCurrentDesktopIndex(IntPtr hMon);
 
         int GetDesktopCount(IntPtr hMon);

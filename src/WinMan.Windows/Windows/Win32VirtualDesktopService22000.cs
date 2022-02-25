@@ -12,12 +12,29 @@ namespace WinMan.Windows
 {
     internal class Win32VirtualDesktopService22000 : IWin32VirtualDesktopService
     {
-        private readonly IComVirtualDesktopManagerInternal VirtualDesktopManagerInternal;
-        private readonly IComVirtualDesktopManager VirtualDesktopManager;
-        private readonly IComApplicationViewCollection ApplicationViewCollection;
-        private readonly IComVirtualDesktopPinnedApps VirtualDesktopPinnedApps;
+        private class Desktop
+        {
+            public Guid Guid { get; init; }
+            public IntPtr Monitor { get; init; }
+
+            public Desktop(IntPtr hMon, IComVirtualDesktop comDesktop)
+            {
+                Guid = comDesktop.GetId();
+                Monitor = hMon;
+            }
+        }
+
+        private IComVirtualDesktopManagerInternal VirtualDesktopManagerInternal;
+        private IComVirtualDesktopManager VirtualDesktopManager;
+        private IComApplicationViewCollection ApplicationViewCollection;
+        private IComVirtualDesktopPinnedApps VirtualDesktopPinnedApps;
 
         public Win32VirtualDesktopService22000()
+        {
+            Connect();
+        }
+
+        public void Connect()
         {
             var shell = (IComServiceProvider10?)Activator.CreateInstance(Type.GetTypeFromCLSID(ComGuids.CLSID_ImmersiveShell, true)!)
                 ?? throw new COMException($"Failed to create instance of {ComGuids.CLSID_ImmersiveShell}");
@@ -40,7 +57,7 @@ namespace WinMan.Windows
 
         public string GetDesktopName(object desktop)
         {
-            IComVirtualDesktop comDesktop = (IComVirtualDesktop)desktop;
+            IComVirtualDesktop comDesktop = GetComDesktop(desktop);
             // get desktop name
             string? desktopName = null;
             try
@@ -59,12 +76,12 @@ namespace WinMan.Windows
 
         public bool HasWindow(object desktop, IntPtr window)
         {
-            return ((IComVirtualDesktop)desktop).GetId() == VirtualDesktopManager.GetWindowDesktopId(window);
+            return ((Desktop)desktop).Guid == VirtualDesktopManager.GetWindowDesktopId(window);
         }
 
         public bool IsCurrentDesktop(IntPtr hMon, object desktop)
         {
-            return ReferenceEquals((IComVirtualDesktop)desktop, VirtualDesktopManagerInternal.GetCurrentDesktop(hMon));
+            return ReferenceEquals(GetComDesktop(desktop), VirtualDesktopManagerInternal.GetCurrentDesktop(hMon));
         }
 
         public bool IsWindowOnCurrentDesktop(IntPtr window)
@@ -80,17 +97,21 @@ namespace WinMan.Windows
 
         public void SwitchToDesktop(IntPtr hMon, object desktop)
         {
-            VirtualDesktopManagerInternal.SwitchDesktop(hMon, (IComVirtualDesktop)desktop);
+            VirtualDesktopManagerInternal.SwitchDesktop(hMon, GetComDesktop(desktop));
         }
 
         public List<object> GetVirtualDesktops(IntPtr hMon)
         {
-            return EnumerateVirtualDesktops(hMon).Cast<object>().ToList();
+            return EnumerateVirtualDesktops(hMon)
+                .Select(x => new Desktop(hMon, x))
+                .Cast<object>().ToList();
         }
 
         public int GetDesktopIndex(IntPtr hMon, object desktop)
         {
-            Guid idSearch = ((IComVirtualDesktop)desktop).GetId();
+            Guid idSearch = desktop is IComVirtualDesktop comDesktop
+                ? comDesktop.GetId()
+                : ((Desktop)desktop).Guid;
             int i = 0;
             foreach (var d in EnumerateVirtualDesktops(hMon))
             {
@@ -103,7 +124,7 @@ namespace WinMan.Windows
 
             return -1;
         }
-
+        
         public object GetDesktopByIndex(IntPtr hMon, int index)
         {
             int count = VirtualDesktopManagerInternal.GetCount(hMon);
@@ -112,13 +133,13 @@ namespace WinMan.Windows
             VirtualDesktopManagerInternal.GetDesktops(hMon, out IComObjectArray desktops);
             desktops.GetAt(index, typeof(IComVirtualDesktop).GUID, out object objdesktop);
             Marshal.ReleaseComObject(desktops);
-            return (IComVirtualDesktop)objdesktop;
+            return new Desktop(hMon, (IComVirtualDesktop)objdesktop);
         }
 
         public void MoveToDesktop(IntPtr hWnd, object desktop)
         {
             ApplicationViewCollection.GetViewForHwnd(hWnd, out var view);
-            VirtualDesktopManagerInternal.MoveViewToDesktop(view, (IComVirtualDesktop)desktop);
+            VirtualDesktopManagerInternal.MoveViewToDesktop(view, GetComDesktop(desktop));
         }
 
         private IEnumerable<IComVirtualDesktop> EnumerateVirtualDesktops(IntPtr hMon)
@@ -130,6 +151,26 @@ namespace WinMan.Windows
                 yield return (IComVirtualDesktop)objdesktop;
             }
             _ = Marshal.ReleaseComObject(desktops);
+        }
+
+        private IComVirtualDesktop GetComDesktop(object desktopObj)
+        {
+            var desktop = (Desktop)desktopObj;
+            var id = desktop.Guid;
+            var hMon = desktop.Monitor;
+
+            VirtualDesktopManagerInternal.GetDesktops(hMon, out IComObjectArray desktops);
+            for (int i = 0; i < VirtualDesktopManagerInternal.GetCount(hMon); i++)
+            {
+                desktops.GetAt(i, typeof(IComVirtualDesktop).GUID, out object objdesktop);
+                if (objdesktop is IComVirtualDesktop d && d.GetId() == id)
+                {
+                    _ = Marshal.ReleaseComObject(desktops);
+                    return d;
+                }
+            }
+            _ = Marshal.ReleaseComObject(desktops);
+            throw new COMException("Desktop does not exist!");
         }
     }
 }

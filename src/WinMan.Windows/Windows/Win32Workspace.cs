@@ -72,7 +72,17 @@ namespace WinMan.Windows
                 {
                     return null;
                 }
-                return FindWindow(hwnd);
+
+                IntPtr desktopHwnd = GetDesktopWindow();
+                while (true)
+                {
+                    IntPtr parentHwnd = GetParent(new(hwnd));
+                    if (parentHwnd == IntPtr.Zero || parentHwnd == desktopHwnd)
+                    {
+                        return FindWindow(hwnd);
+                    }   
+                    hwnd = parentHwnd;
+                }
             }
         }
 
@@ -108,6 +118,8 @@ namespace WinMan.Windows
                     {
                         vds = new Win32VirtualDesktopService17661();
                     }
+
+                    vds = new FaultTolerantWin32VirtualDesktopService(vds);
 
                     // TODO: Pass HMONITOR
                     return new Win32VirtualDesktopManager(this, vds, IntPtr.Zero);

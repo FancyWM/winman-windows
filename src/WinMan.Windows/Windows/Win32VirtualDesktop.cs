@@ -19,11 +19,50 @@ namespace WinMan.Windows
             m_desktop = desktop;
         }
 
-        public bool IsCurrent => m_vds.IsCurrentDesktop(m_hMon, m_desktop);
+        public bool IsCurrent
+        {
+            get
+            {
+                try
+                {
+                    return m_vds.IsCurrentDesktop(m_hMon, m_desktop);
+                }
+                catch (COMException)
+                {
+                    return false;
+                }
+            }
+        }
 
-        public int Index => m_vds.GetDesktopIndex(m_hMon, m_desktop);
+        public int Index
+        {
+            get
+            {
+                try
+                {
+                    return m_vds.GetDesktopIndex(m_hMon, m_desktop);
+                }
+                catch (COMException)
+                {
+                    return m_vds.GetDesktopCount(m_hMon) - 1;
+                }
+            }
+        }
 
-        public string Name => m_vds.GetDesktopName(m_desktop);
+        public string Name
+        {
+            get
+            {
+                try
+                {
+                    return m_vds.GetDesktopName(m_desktop);
+                }
+                catch (COMException)
+                {
+                    return $"Desktop {m_vds.GetDesktopCount(m_hMon) - 1}";
+                }
+            }
+        }
 
         public IWorkspace Workspace => m_workspace;
 
