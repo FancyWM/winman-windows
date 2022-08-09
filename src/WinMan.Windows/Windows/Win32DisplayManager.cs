@@ -46,7 +46,7 @@ namespace WinMan.Windows
             {
                 lock (m_displays)
                 {
-                    return m_displays.ToList();
+                    return m_displays.OrderBy(x => x.DeviceName).ToList();
                 }
             }
         }
@@ -75,16 +75,38 @@ namespace WinMan.Windows
         private List<IntPtr> GetMonitors()
         {
             List<IntPtr> monitors = new List<IntPtr>();
+            Exception? exception = null;
             unsafe
             {
-                if (!EnumDisplayMonitors(new(), (RECT*)null, delegate (HMONITOR hMonitor, HDC hdcMonitor, RECT* lprcMonitor, LPARAM dwData)
+                // Handling the error code from EnumDisplayMonitors is problematic, because not all fail modes are
+                // documented. Microsoft's own samples and WPF sources do not handle the errors from this call.
+                EnumDisplayMonitors(new(), (RECT*)null, delegate (HMONITOR hMonitor, HDC hdcMonitor, RECT* lprcMonitor, LPARAM dwData)
                 {
-                    if (IsVisibleMonitor(hMonitor))
+                    try
                     {
-                        monitors.Add(hMonitor);
+                        if (IsVisibleMonitor(hMonitor))
+                        {
+                            monitors.Add(hMonitor);
+                        }
+                        return true;
                     }
-                    return true;
-                }, new LPARAM()))
+                    catch (InvalidDisplayReferenceException)
+                    {
+                        return true;
+                    }
+                    catch (Exception e)
+                    {
+                        exception = e;
+                        return false;
+                    }
+                }, new LPARAM());
+
+                if (exception != null)
+                {
+                    throw new AggregateException("An exception was thrown from the EnumDisplayMonitors callback!", exception);
+                }
+
+                if (monitors.Count == 0)
                 {
                     throw new Win32Exception().WithMessage("Could not enumerate the display monitors attached to the system!");
                 }
@@ -189,6 +211,7 @@ namespace WinMan.Windows
             {
                 var (mi, device, refreshRate) = GetMonitorInfoAndSettings(hMonitor);
                 var dpiScale = GetDpiScale(hMonitor);
+
                 return (
                     deviceName: device,
                     workArea: new Rectangle(mi.rcWork.left, mi.rcWork.top, mi.rcWork.right, mi.rcWork.bottom),
