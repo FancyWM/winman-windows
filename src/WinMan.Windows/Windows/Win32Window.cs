@@ -183,10 +183,17 @@ namespace WinMan.Windows
 
         public void Close()
         {
-            if (!CloseWindow(new(m_hwnd)))
+            unsafe
             {
-                CheckAlive();
-                throw new Win32Exception().WithMessage($"Could not close {this}!");
+                var flags = SendMessageTimeout_fuFlags.SMTO_NORMAL | SendMessageTimeout_fuFlags.SMTO_ABORTIFHUNG;
+                nuint result = 0;
+                if (new LRESULT() == SendMessageTimeout(new(m_hwnd), Constants.WM_CLOSE, new(), new(), flags, 3000, &result))
+                {
+                    int err = Marshal.GetLastWin32Error();
+                    err = err == 0 ? (int)Constants.ERROR_TIMEOUT : err;
+                    CheckAlive();
+                    throw new Win32Exception(err).WithMessage($"Could not close {this}");
+                }
             }
         }
 
