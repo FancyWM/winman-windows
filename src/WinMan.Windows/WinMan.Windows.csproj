@@ -53,10 +53,10 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.Win32.Registry" Version="5.0.0" />
-    <PackageReference Include="WinMan.Core" Version="1.0.1" />
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\..\..\WinMan\src\WinMan\WinMan.csproj" />
     <ProjectReference Include="..\WinMan.Windows.DllImports\WinMan.Windows.DllImports.csproj">
       <ReferenceOutputAssembly>true</ReferenceOutputAssembly>
       <IncludeAssets>{ProjectName}.dll</IncludeAssets>

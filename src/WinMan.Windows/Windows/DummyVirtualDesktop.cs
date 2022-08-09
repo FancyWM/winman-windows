@@ -1,9 +1,12 @@
 ﻿using System;
+using System.Linq;
 
 namespace WinMan.Windows
 {
     public class DummyVirtualDesktop : IVirtualDesktop
     {
+        public bool IsAlive => Workspace.VirtualDesktopManager.Desktops.Contains(this);
+
         public bool IsCurrent => true;
 
         public int Index => 0;

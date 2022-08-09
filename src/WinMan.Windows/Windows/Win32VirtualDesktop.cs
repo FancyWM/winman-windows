@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Linq;
 using System.Runtime.InteropServices;
 
 namespace WinMan.Windows
@@ -18,6 +19,8 @@ namespace WinMan.Windows
             m_vds = vds;
             m_desktop = desktop;
         }
+
+        public bool IsAlive => m_workspace.VirtualDesktopManager.Desktops.Contains(this);
 
         public bool IsCurrent
         {

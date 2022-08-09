@@ -15,6 +15,8 @@ namespace WinMan.Windows
 
         public event EventHandler<DisplayRefreshRateChangedEventArgs>? RefreshRateChanged;
 
+        internal int Index { get; set; }
+
         public Rectangle WorkArea
         {
             get
@@ -60,6 +62,7 @@ namespace WinMan.Windows
         public IWorkspace Workspace => m_manager.Workspace;
 
         internal IntPtr Handle => m_hMonitor;
+        internal string DeviceName => m_deviceName;
 
         private readonly Win32DisplayManager m_manager;
         private readonly IntPtr m_hMonitor;

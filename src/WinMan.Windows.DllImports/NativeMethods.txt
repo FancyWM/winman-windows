@@ -1,5 +1,4 @@
 ﻿CloseHandle
-CloseWindow
 CreateWindowEx
 DestroyWindow
 DispatchMessage
@@ -33,6 +32,7 @@ IsWindowVisible
 KillTimer
 NtQueryInformationProcess
 OpenProcess
+QueryDisplayConfig
 SendMessageTimeout
 SetForegroundWindow
 SetLastError
@@ -50,6 +50,7 @@ WM_GETTEXT
 WM_GETTEXTLENGTH
 WM_WININICHANGE
 WM_TIMER
+WM_CLOSE
 WM_USER
 
 MINMAXINFO
@@ -81,6 +82,7 @@ WINDOWS_EX_STYLE
 DWMWINDOWATTRIBUTE
 
 DISPLAY_DEVICE_MIRRORING_DRIVER
+QDC_ONLY_ACTIVE_PATHS
 
 WINEVENT_OUTOFCONTEXT
 
