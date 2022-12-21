@@ -12,6 +12,7 @@ namespace WinMan.Windows
     {
         private const int RPC_S_SERVER_UNAVAILABLE = unchecked((int)0x800706BA);
         private const int RPC_S_CALL_FAILED = unchecked((int)0x800706BE);
+        private const int REGDB_E_CLASSNOTREG = unchecked((int)0x80040154);
 
         private readonly IWin32VirtualDesktopService m_vds;
 
@@ -99,7 +100,7 @@ namespace WinMan.Windows
                     }
                     return func();
                 }
-                catch (COMException e) when (e.HResult == RPC_S_SERVER_UNAVAILABLE || e.HResult == RPC_S_CALL_FAILED)
+                catch (COMException e) when (e.HResult == RPC_S_SERVER_UNAVAILABLE || e.HResult == RPC_S_CALL_FAILED || e.HResult == REGDB_E_CLASSNOTREG)
                 {
                     exception = e;
                 }
@@ -126,7 +127,7 @@ namespace WinMan.Windows
                     action();
                     return;
                 }
-                catch (COMException e) when (e.HResult == RPC_S_SERVER_UNAVAILABLE || e.HResult == RPC_S_CALL_FAILED)
+                catch (COMException e) when (e.HResult == RPC_S_SERVER_UNAVAILABLE || e.HResult == RPC_S_CALL_FAILED || e.HResult == REGDB_E_CLASSNOTREG)
                 {
                     exception = e;
                 }
