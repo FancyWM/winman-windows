@@ -327,7 +327,7 @@ namespace WinMan.Windows
                 }
             }
 
-            return (mi, device, (int)GetVirtualMonitorRefreshRate());
+            return (mi, device, (int)devMode.dmDisplayFrequency);
         }
 
         private bool IsMonitorValid(IntPtr hMonitor)
