@@ -253,7 +253,7 @@ namespace WinMan.Windows
                         {
                             throw new InvalidOperationException("The window does not support minimization");
                         }
-                        sw = SHOW_WINDOW_CMD.SW_MINIMIZE;
+                        sw = SHOW_WINDOW_CMD.SW_SHOWMINNOACTIVE;
                         break;
                     case WindowState.Maximized:
                         if (!CanMaximize)
@@ -263,7 +263,7 @@ namespace WinMan.Windows
                         sw = SHOW_WINDOW_CMD.SW_MAXIMIZE;
                         break;
                     case WindowState.Restored:
-                        sw = SHOW_WINDOW_CMD.SW_NORMAL;
+                        sw = SHOW_WINDOW_CMD.SW_SHOWNOACTIVATE;
                         break;
                     default:
                         throw new InvalidProgramException();
