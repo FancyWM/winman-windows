@@ -375,6 +375,18 @@ namespace WinMan.Windows
             return Process.GetProcessById((int)processId);
         }
 
+        public void RaisePositionChangeStart()
+        {
+            PositionChangeStart?.Invoke(this, new WindowPositionChangedEventArgs(this, Position, Position));
+            UpdateConfiguration();
+        }
+
+        public void RaisePositionChangeEnd()
+        {
+            UpdateConfiguration();
+            PositionChangeEnd?.Invoke(this, new WindowPositionChangedEventArgs(this, Position, Position));
+        }
+
         public override bool Equals(object? obj)
         {
             return obj is Win32Window win && win.m_hwnd == m_hwnd;
