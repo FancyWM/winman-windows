@@ -43,6 +43,11 @@ SetWindowPos
 ShowWindow
 WindowsGetStringRawBuffer
 WindowsDeleteString
+ChildWindowFromPointEx
+
+HWND_TOP
+HWND_TOPMOST
+HWND_BOTTOM
 
 WM_DISPLAYCHANGE
 WM_GETMINMAXINFO
