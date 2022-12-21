@@ -199,12 +199,21 @@ namespace WinMan.Windows
 
         public void SetPosition(Rectangle position)
         {
+            SetPosition(position, redraw: true);
+        }
+
+        public void SetPosition(Rectangle position, bool redraw)
+        {
             if (m_state != WindowState.Restored)
             {
                 throw new InvalidOperationException("Cannot set the position of a window that is not in the restored state!");
             }
 
-            var flags = SetWindowPos_uFlags.SWP_NOZORDER | SetWindowPos_uFlags.SWP_ASYNCWINDOWPOS | SetWindowPos_uFlags.SWP_NOACTIVATE;
+            var flags = SetWindowPos_uFlags.SWP_NOZORDER | SetWindowPos_uFlags.SWP_NOACTIVATE | SetWindowPos_uFlags.SWP_ASYNCWINDOWPOS;
+            if (!redraw)
+            {
+                flags |= SetWindowPos_uFlags.SWP_NOREDRAW;
+            }
             Rectangle currentPosition = Position;
             if (!CanResize)
             {
@@ -281,7 +290,7 @@ namespace WinMan.Windows
 
             try
             {
-                IntPtr hwndAfter = topmost ? new IntPtr(-1) : new IntPtr(0);
+                IntPtr hwndAfter = topmost ? Constants.HWND_TOPMOST : Constants.HWND_TOP;
                 InsertAfter(Handle, hwndAfter);
 
                 UpdateTopmostAndNotify(topmost)?.Invoke();
@@ -312,13 +321,13 @@ namespace WinMan.Windows
         public void SendToBack()
         {
             CheckAlive();
-            InsertAfter(m_hwnd, new IntPtr(1));
+            InsertAfter(m_hwnd, Constants.HWND_BOTTOM);
         }
 
         public void BringToFront()
         {
             CheckAlive();
-            InsertAfter(m_hwnd, new IntPtr(0));
+            InsertAfter(m_hwnd, Constants.HWND_TOP);
         }
 
         public IWindow? GetNextWindow()
@@ -788,7 +797,7 @@ namespace WinMan.Windows
                 m_isDead = true;
                 return;
             }
-            
+
             // Carry all of the updates, then notify!
             var raiseTopmostChanged = UpdateTopmostAndNotify(isTopmost);
             var raiseStateChanged = UpdateStateAndNotify(state);
