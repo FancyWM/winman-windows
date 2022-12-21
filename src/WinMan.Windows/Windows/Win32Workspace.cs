@@ -80,7 +80,7 @@ namespace WinMan.Windows
                     if (parentHwnd == IntPtr.Zero || parentHwnd == desktopHwnd)
                     {
                         return FindWindow(hwnd);
-                    }   
+                    }
                     hwnd = parentHwnd;
                 }
             }
@@ -251,6 +251,33 @@ namespace WinMan.Windows
             {
                 return null;
             }
+        }
+
+        public IWindow? FindWindowFromPoint(Point pt)
+        {
+            var candidates = new List<IWindow>();
+            lock (m_visibleWindows)
+            {
+                foreach (var window in m_visibleWindows)
+                {
+                    if (window.Position.Contains(pt))
+                    {
+                        candidates.Add(window);
+                    }
+                }
+            }
+
+            if (candidates.Count == 0)
+            {
+                return null;
+            }
+            else if (candidates.Count == 1)
+            {
+                return candidates[0];
+            }
+
+            var comparer = CreateSnapshotZOrderComparer();
+            return candidates.OrderBy(x => x, comparer).First();
         }
 
         public IReadOnlyList<IWindow> GetSnapshot()
