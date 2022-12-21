@@ -106,17 +106,24 @@ namespace WinMan.Windows
                     }
 
                     IWin32VirtualDesktopService vds;
-                    if (osBuild >= 22449)
+                    try
                     {
-                        vds = new Win32VirtualDesktopService22449();
+                        if (osBuild >= 22449)
+                        {
+                            vds = new Win32VirtualDesktopService22449();
+                        }
+                        else if (osBuild >= 22000)
+                        {
+                            vds = new Win32VirtualDesktopService22000();
+                        }
+                        else
+                        {
+                            vds = new Win32VirtualDesktopService17661();
+                        }
                     }
-                    else if (osBuild >= 22000)
+                    catch (InvalidCastException)
                     {
-                        vds = new Win32VirtualDesktopService22000();
-                    }
-                    else
-                    {
-                        vds = new Win32VirtualDesktopService17661();
+                        return new DummyVirtualDesktopManager(this);
                     }
 
                     vds = new FaultTolerantWin32VirtualDesktopService(vds);
