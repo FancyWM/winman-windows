@@ -92,10 +92,6 @@ namespace WinMan.Windows
             }
             catch (COMException e) when ((uint)e.HResult == /*TYPE_E_ELEMENTNOTFOUND*/ 0x8002802B)
             {
-                if (!window.IsAlive)
-                {
-                    throw new InvalidWindowReferenceException(window.Handle);
-                }
                 return false;
             }
         }
