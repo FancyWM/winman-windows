@@ -5,7 +5,7 @@
  - Event-based API
  - Designed to be used by window management software
 
-### See the [Documentation](https://veselink1.github.io/winman-windows/WinMan.Windows.html).
+### See the [Documentation](https://fancywm.github.io/winman-windows/WinMan.Windows.html).
 
 ---
 ### WinMan is a dependency of [FancyWM](https://www.microsoft.com/en-us/p/fancywm/9p1741lkhqs9).
