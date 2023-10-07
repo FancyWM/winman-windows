@@ -11,6 +11,8 @@ using WinMan.Windows.Utilities;
 using WinMan.Windows.DllImports;
 using static WinMan.Windows.DllImports.Constants;
 using static WinMan.Windows.DllImports.NativeMethods;
+using Microsoft.Win32;
+using WinMan.Windows.Windows;
 
 namespace WinMan.Windows
 {
@@ -100,6 +102,7 @@ namespace WinMan.Windows
                 IVirtualDesktopManager Init()
                 {
                     var osBuild = Environment.OSVersion.Version.Build;
+                    var osRev = (int)Registry.LocalMachine.OpenSubKey("Software\\Microsoft\\Windows NT\\CurrentVersion")!.GetValue("UBR")!;
                     if (osBuild < 17661)
                     {
                         return new DummyVirtualDesktopManager(this);
@@ -110,7 +113,14 @@ namespace WinMan.Windows
                     {
                         if (osBuild >= 22449)
                         {
-                            vds = new Win32VirtualDesktopService22449();
+                            if (osRev >= 2215)
+                            {
+                                vds = new Win32VirtualDesktopService22621R2215();
+                            }
+                            else
+                            {
+                                vds = new Win32VirtualDesktopService22449();
+                            }
                         }
                         else if (osBuild >= 22000)
                         {
