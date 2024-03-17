@@ -18,17 +18,17 @@ namespace WinMan.Windows.Com.Build22631R3085
 
     [ComImport]
     [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-	[Guid("53F5CA0B-158F-4124-900C-057158060B27")]
-	internal interface IComVirtualDesktopManagerInternal
+    [Guid("53F5CA0B-158F-4124-900C-057158060B27")]
+    internal interface IComVirtualDesktopManagerInternal
     {
-		int GetCount();
-		void MoveViewToDesktop(IComApplicationView view, IComVirtualDesktop desktop);
-		bool CanViewMoveDesktops(IComApplicationView view);
+        int GetCount();
+        void MoveViewToDesktop(IComApplicationView view, IComVirtualDesktop desktop);
+        bool CanViewMoveDesktops(IComApplicationView view);
         IComVirtualDesktop GetCurrentDesktop();
-		void GetDesktops(out IComObjectArray desktops);
-		[PreserveSig]
-		int GetAdjacentDesktop(IComVirtualDesktop from, int direction, out IComVirtualDesktop desktop);
-		void SwitchDesktop(IComVirtualDesktop desktop);
+        void GetDesktops(out IComObjectArray desktops);
+        [PreserveSig]
+        int GetAdjacentDesktop(IComVirtualDesktop from, int direction, out IComVirtualDesktop desktop);
+        void SwitchDesktop(IComVirtualDesktop desktop);
         IComVirtualDesktop CreateDesktop();
         void MoveDesktop(IComVirtualDesktop desktop, int nIndex);
         void RemoveDesktop(IComVirtualDesktop desktop, IComVirtualDesktop fallback);
