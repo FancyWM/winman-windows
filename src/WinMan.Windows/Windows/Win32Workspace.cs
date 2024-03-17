@@ -117,7 +117,11 @@ namespace WinMan.Windows
                         }
                         else if (osBuild >= 22449)
                         {
-                            if (osRev >= 2215)
+                            if (osRev >= 3296)
+                            {
+                                vds = new Win32VirtualDesktopService22631R3085();
+                            }
+                            else if (osRev >= 2215)
                             {
                                 vds = new Win32VirtualDesktopService22621R2215();
                             }
