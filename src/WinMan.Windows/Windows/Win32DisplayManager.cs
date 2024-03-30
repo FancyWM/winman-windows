@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using System.Linq;
 using System.Runtime.InteropServices;
+using System.Threading;
 
 using Microsoft.Win32;
 
@@ -114,6 +115,23 @@ namespace WinMan.Windows
             return monitors;
         }
 
+        private List<IntPtr> WaitForMonitors()
+        {
+            for (int i = 0; i < 10; i++)
+            {
+                if (i != 0)
+                {
+                    Thread.Sleep(500);
+                }
+                var monitors = GetMonitors();
+                if (monitors.Count > 0)
+                {
+                    return monitors;
+                }
+            }
+            throw new IndexOutOfRangeException("EnumDisplayMonitors returned no monitors. The operation was retied but failed.");
+        }
+
         internal void OnDisplayChange()
         {
             var addedDisplays = new List<Win32Display>();
@@ -124,7 +142,7 @@ namespace WinMan.Windows
             lock (m_displays)
             {
                 oldPrimaryDisplay = PrimaryDisplay;
-                var newMonitors = GetMonitors();
+                var newMonitors = WaitForMonitors();
                 var handles = m_displays.Select(x => x.Handle);
 
                 var added = newMonitors.Except(handles).ToList();
@@ -144,7 +162,8 @@ namespace WinMan.Windows
                     addedDisplays.Add(disp);
                 }
 
-                newPrimaryDisplay = m_displays.First(x => x.Bounds.TopLeft == new Point(0, 0));
+                newPrimaryDisplay = m_displays.FirstOrDefault(x => x.Bounds.TopLeft == new Point(0, 0))
+                    ?? m_displays.First();
                 if (!oldPrimaryDisplay.Equals(newPrimaryDisplay))
                 {
                     PrimaryDisplay = newPrimaryDisplay;
