@@ -243,6 +243,11 @@ namespace WinMan.Windows
 
         public void SetState(WindowState state)
         {
+            SetState(state, skipTransition: false);
+        }
+
+        public void SetState(WindowState state, bool skipTransition)
+        {
             try
             {
                 SHOW_WINDOW_CMD sw;
@@ -269,10 +274,23 @@ namespace WinMan.Windows
                         throw new InvalidProgramException();
                 }
 
-                if (!ShowWindow(new(m_hwnd), sw))
+                if (skipTransition)
                 {
-                    // Returns false when was previously visible or when failed.
-                    CheckAlive();
+                    var wplc = GetWindowPlacementSafe();
+                    wplc.showCmd = sw;
+                    if (!SetWindowPlacement(new (m_hwnd), in wplc))
+                    {
+                        // Returns when failed.
+                        CheckAlive();
+                    }
+                }
+                else
+                {
+                    if (!ShowWindow(new(m_hwnd), sw))
+                    {
+                        // Returns false when was previously visible or when failed.
+                        CheckAlive();
+                    }
                 }
 
                 UpdateStateAndNotify(state)?.Invoke();

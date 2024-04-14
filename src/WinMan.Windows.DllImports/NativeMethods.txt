@@ -23,6 +23,7 @@ GetWindow
 GetClassName
 GetWindowLong
 GetWindowPlacement
+SetWindowPlacement
 GetWindowRect
 GetWindowText
 GetWindowTextLength
