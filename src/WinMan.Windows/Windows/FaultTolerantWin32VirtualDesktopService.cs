@@ -1,10 +1,10 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Linq;
+using System.Runtime.ExceptionServices;
 using System.Runtime.InteropServices;
-using System.Text;
 using System.Threading;
-using System.Threading.Tasks;
+
+using static WinMan.Windows.IWin32VirtualDesktopService;
 
 namespace WinMan.Windows
 {
@@ -31,7 +31,7 @@ namespace WinMan.Windows
             return ExecuteWithRetry(() => m_vds.GetCurrentDesktopIndex(hMon));
         }
 
-        public object GetDesktopByIndex(IntPtr hMon, int index)
+        public Desktop GetDesktopByIndex(IntPtr hMon, int index)
         {
             return ExecuteWithRetry(() => m_vds.GetDesktopByIndex(hMon, index));
         }
@@ -41,27 +41,27 @@ namespace WinMan.Windows
             return ExecuteWithRetry(() => m_vds.GetDesktopCount(hMon));
         }
 
-        public int GetDesktopIndex(IntPtr hMon, object m_desktop)
+        public int GetDesktopIndex(IntPtr hMon, Desktop m_desktop)
         {
             return ExecuteWithRetry(() => m_vds.GetDesktopIndex(hMon, m_desktop));
         }
 
-        public string GetDesktopName(object desktop)
+        public string GetDesktopName(Desktop desktop)
         {
             return ExecuteWithRetry(() => m_vds.GetDesktopName(desktop));
         }
 
-        public List<object> GetVirtualDesktops(IntPtr hMon)
+        public List<Desktop> GetVirtualDesktops(IntPtr hMon)
         {
             return ExecuteWithRetry(() => m_vds.GetVirtualDesktops(hMon));
         }
 
-        public bool HasWindow(object desktop, IntPtr hWnd)
+        public bool HasWindow(Desktop desktop, IntPtr hWnd)
         {
             return ExecuteWithRetry(() => m_vds.HasWindow(desktop, hWnd));
         }
 
-        public bool IsCurrentDesktop(IntPtr hMon, object desktop)
+        public bool IsCurrentDesktop(IntPtr hMon, Desktop desktop)
         {
             return ExecuteWithRetry(() => m_vds.IsCurrentDesktop(hMon, desktop));
         }
@@ -76,19 +76,19 @@ namespace WinMan.Windows
             return ExecuteWithRetry(() => m_vds.IsWindowPinned(hWnd));
         }
 
-        public void MoveToDesktop(IntPtr hWnd, object desktop)
+        public void MoveToDesktop(IntPtr hWnd, Desktop desktop)
         {
             ExecuteWithRetry(() => m_vds.MoveToDesktop(hWnd, desktop));
         }
 
-        public void SwitchToDesktop(IntPtr hMon, object desktop)
+        public void SwitchToDesktop(IntPtr hMon, Desktop desktop)
         {
             ExecuteWithRetry(() => m_vds.SwitchToDesktop(hMon, desktop));
         }
 
         private T ExecuteWithRetry<T>(Func<T> func)
         {
-            Exception? exception = null;
+            ExceptionDispatchInfo? exception = null;
             for (int i = 0; i < 10; i++)
             {
                 try
@@ -102,19 +102,20 @@ namespace WinMan.Windows
                 }
                 catch (COMException e) when (e.HResult == RPC_S_SERVER_UNAVAILABLE || e.HResult == RPC_S_CALL_FAILED || e.HResult == REGDB_E_CLASSNOTREG)
                 {
-                    exception = e;
+                    exception = ExceptionDispatchInfo.Capture(e);
                 }
                 catch (NotImplementedException e)
                 {
-                    exception = e;
+                    exception = ExceptionDispatchInfo.Capture(e);
                 }
             }
-            throw exception!;
+            exception!.Throw();
+            throw new InvalidProgramException();
         }
 
         private void ExecuteWithRetry(Action action)
         {
-            Exception? exception = null;
+            ExceptionDispatchInfo? exception = null;
             for (int i = 0; i < 10; i++)
             {
                 try
@@ -129,14 +130,15 @@ namespace WinMan.Windows
                 }
                 catch (COMException e) when (e.HResult == RPC_S_SERVER_UNAVAILABLE || e.HResult == RPC_S_CALL_FAILED || e.HResult == REGDB_E_CLASSNOTREG)
                 {
-                    exception = e;
+                    exception = ExceptionDispatchInfo.Capture(e);
                 }
                 catch (NotImplementedException e)
                 {
-                    exception = e;
+                    exception = ExceptionDispatchInfo.Capture(e);
                 }
             }
-            throw exception!;
+            exception!.Throw();
+            throw new InvalidProgramException();
         }
     }
 }

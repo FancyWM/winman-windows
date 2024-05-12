@@ -2,18 +2,20 @@
 using System.Linq;
 using System.Runtime.InteropServices;
 
+using static WinMan.Windows.IWin32VirtualDesktopService;
+
 namespace WinMan.Windows
 {
     public class Win32VirtualDesktop : IVirtualDesktop
     {
         private readonly Win32Workspace m_workspace;
         private readonly IWin32VirtualDesktopService m_vds;
-        private readonly object m_desktop;
+        private readonly Desktop m_desktop;
         private readonly IntPtr m_hMon;
 
         public event EventHandler<DesktopChangedEventArgs>? Removed;
 
-        internal Win32VirtualDesktop(Win32Workspace workspace, IWin32VirtualDesktopService vds, object desktop)
+        internal Win32VirtualDesktop(Win32Workspace workspace, IWin32VirtualDesktopService vds, Desktop desktop)
         {
             m_workspace = workspace;
             m_vds = vds;

@@ -6,6 +6,8 @@ using System.Runtime.InteropServices;
 using WinMan.Windows.Com;
 using WinMan.Windows.Com.Build17661;
 
+using static WinMan.Windows.IWin32VirtualDesktopService;
+
 namespace WinMan.Windows
 {
     internal class Win32VirtualDesktopService17661 : IWin32VirtualDesktopService
@@ -34,7 +36,7 @@ namespace WinMan.Windows
 
         public int GetCurrentDesktopIndex(IntPtr hMon)
         {
-            return GetDesktopIndex(hMon, VirtualDesktopManagerInternal.GetCurrentDesktop());
+            return GetDesktopIndex(hMon, new Desktop(VirtualDesktopManagerInternal.GetCurrentDesktop().GetId()));
         }
 
         public int GetDesktopCount(IntPtr _hMon)
@@ -42,9 +44,9 @@ namespace WinMan.Windows
             return VirtualDesktopManagerInternal.GetCount();
         }
 
-        public string GetDesktopName(object desktop)
+        public string GetDesktopName(Desktop desktop)
         {
-            IComVirtualDesktop comDesktop = (IComVirtualDesktop)desktop;
+            IComVirtualDesktop comDesktop = GetComDesktop(desktop);
             // return name of desktop or "Desktop n" if it has no name
             Guid guid = comDesktop.GetId();
 
@@ -59,19 +61,19 @@ namespace WinMan.Windows
             // no name found, generate generic name
             if (string.IsNullOrEmpty(desktopName))
             { // create name "Desktop n" (n = number starting with 1)
-                desktopName = "Desktop " + (GetDesktopIndex(IntPtr.Zero, comDesktop) + 1).ToString();
+                desktopName = "Desktop " + (GetDesktopIndex(IntPtr.Zero, desktop) + 1).ToString();
             }
             return desktopName;
         }
 
-        public bool HasWindow(object desktop, IntPtr window)
+        public bool HasWindow(Desktop desktop, IntPtr window)
         {
-            return ((IComVirtualDesktop)desktop).GetId() == VirtualDesktopManager.GetWindowDesktopId(window);
+            return desktop.Guid == VirtualDesktopManager.GetWindowDesktopId(window);
         }
 
-        public bool IsCurrentDesktop(IntPtr _hMon, object desktop)
+        public bool IsCurrentDesktop(IntPtr _hMon, Desktop desktop)
         {
-            return ReferenceEquals((IComVirtualDesktop)desktop, VirtualDesktopManagerInternal.GetCurrentDesktop());
+            return desktop.Guid == VirtualDesktopManagerInternal.GetCurrentDesktop().GetId();
         }
 
         public bool IsWindowOnCurrentDesktop(IntPtr window)
@@ -85,19 +87,19 @@ namespace WinMan.Windows
             return VirtualDesktopPinnedApps.IsViewPinned(view);
         }
 
-        public void SwitchToDesktop(IntPtr hMon, object desktop)
+        public void SwitchToDesktop(IntPtr hMon, Desktop desktop)
         {
-            VirtualDesktopManagerInternal.SwitchDesktop((IComVirtualDesktop)desktop);
+            VirtualDesktopManagerInternal.SwitchDesktop(GetComDesktop(desktop));
         }
 
-        public List<object> GetVirtualDesktops(IntPtr hMon)
+        public List<Desktop> GetVirtualDesktops(IntPtr hMon)
         {
-            return EnumerateVirtualDesktops().Cast<object>().ToList();
+            return EnumerateVirtualDesktops().Select(objdesktop => new Desktop(objdesktop.GetId())).ToList();
         }
 
-        public int GetDesktopIndex(IntPtr hWnd, object desktop)
+        public int GetDesktopIndex(IntPtr hWnd, Desktop desktop)
         {
-            Guid idSearch = ((IComVirtualDesktop)desktop).GetId();
+            Guid idSearch = desktop.Guid;
             int i = 0;
             foreach (var d in EnumerateVirtualDesktops())
             {
@@ -111,7 +113,7 @@ namespace WinMan.Windows
             return -1;
         }
 
-        public object GetDesktopByIndex(IntPtr hMon, int index)
+        public Desktop GetDesktopByIndex(IntPtr hMon, int index)
         {
             int count = VirtualDesktopManagerInternal.GetCount();
             if (index < 0 || index >= count) throw new ArgumentOutOfRangeException(nameof(index));
@@ -119,13 +121,13 @@ namespace WinMan.Windows
             VirtualDesktopManagerInternal.GetDesktops(out IComObjectArray desktops);
             desktops.GetAt(index, typeof(IComVirtualDesktop).GUID, out object objdesktop);
             Marshal.ReleaseComObject(desktops);
-            return (IComVirtualDesktop)objdesktop;
+            return new Desktop(((IComVirtualDesktop)objdesktop).GetId());
         }
 
-        public void MoveToDesktop(IntPtr hWnd, object desktop)
+        public void MoveToDesktop(IntPtr hWnd, Desktop desktop)
         {
             ApplicationViewCollection.GetViewForHwnd(hWnd, out var view);
-            VirtualDesktopManagerInternal.MoveViewToDesktop(view, (IComVirtualDesktop)desktop);
+            VirtualDesktopManagerInternal.MoveViewToDesktop(view, GetComDesktop(desktop));
         }
 
         private IEnumerable<IComVirtualDesktop> EnumerateVirtualDesktops()
@@ -137,6 +139,24 @@ namespace WinMan.Windows
                 yield return (IComVirtualDesktop)objdesktop;
             }
             _ = Marshal.ReleaseComObject(desktops);
+        }
+
+        private IComVirtualDesktop GetComDesktop(Desktop desktop)
+        {
+            var id = desktop.Guid;
+
+            VirtualDesktopManagerInternal.GetDesktops(out IComObjectArray desktops);
+            for (int i = 0; i < VirtualDesktopManagerInternal.GetCount(); i++)
+            {
+                desktops.GetAt(i, typeof(IComVirtualDesktop).GUID, out object objdesktop);
+                if (objdesktop is IComVirtualDesktop d && d.GetId() == id)
+                {
+                    _ = Marshal.ReleaseComObject(desktops);
+                    return d;
+                }
+            }
+            _ = Marshal.ReleaseComObject(desktops);
+            throw new COMException("Desktop does not exist!");
         }
     }
 }

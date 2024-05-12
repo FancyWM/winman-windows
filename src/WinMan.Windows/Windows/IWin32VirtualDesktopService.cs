@@ -5,6 +5,23 @@ namespace WinMan.Windows
 {
     internal interface IWin32VirtualDesktopService
     {
+        class Desktop
+        {
+            public IntPtr Monitor { get; init; }
+            public Guid Guid { get; init; }
+
+            public Desktop(Guid guid)
+            {
+                Guid = guid;
+            }
+
+            public Desktop(IntPtr monitor, Guid guid)
+            {
+                Monitor = monitor;
+                Guid = guid;
+            }
+        }
+
         void Connect();
 
         int GetCurrentDesktopIndex(IntPtr hMon);
@@ -13,22 +30,22 @@ namespace WinMan.Windows
 
         bool IsWindowPinned(IntPtr hWnd);
 
-        bool IsCurrentDesktop(IntPtr hMon, object desktop);
+        bool IsCurrentDesktop(IntPtr hMon, Desktop desktop);
 
-        string GetDesktopName(object desktop);
+        string GetDesktopName(Desktop desktop);
 
-        void SwitchToDesktop(IntPtr hMon, object desktop);
+        void SwitchToDesktop(IntPtr hMon, Desktop desktop);
 
-        void MoveToDesktop(IntPtr hWnd, object desktop);
+        void MoveToDesktop(IntPtr hWnd, Desktop desktop);
 
         bool IsWindowOnCurrentDesktop(IntPtr hWnd);
 
-        bool HasWindow(object desktop, IntPtr hWnd);
-        
-        object GetDesktopByIndex(IntPtr hMon, int index);
+        bool HasWindow(Desktop desktop, IntPtr hWnd);
 
-        List<object> GetVirtualDesktops(IntPtr hMon);
+        Desktop GetDesktopByIndex(IntPtr hMon, int index);
 
-        int GetDesktopIndex(IntPtr hMon, object m_desktop);
+        List<Desktop> GetVirtualDesktops(IntPtr hMon);
+
+        int GetDesktopIndex(IntPtr hMon, Desktop m_desktop);
     }
 }
