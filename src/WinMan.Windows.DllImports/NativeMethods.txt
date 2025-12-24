@@ -7,6 +7,7 @@ DwmRegisterThumbnail
 DwmUnregisterThumbnail
 EnumDisplayMonitors
 EnumDisplaySettings
+EnumDisplayDevices
 EnumWindows
 GetAncestor
 GetClassName
@@ -93,3 +94,5 @@ QDC_ONLY_ACTIVE_PATHS
 WINEVENT_OUTOFCONTEXT
 
 MONITOR_DPI_TYPE
+DISPLAY_DEVICE
+EDD_GET_DEVICE_INTERFACE_NAME

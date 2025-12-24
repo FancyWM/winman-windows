@@ -47,7 +47,7 @@ namespace WinMan.Windows
             {
                 lock (m_displays)
                 {
-                    return m_displays.OrderBy(x => x.DeviceName).ToList();
+                    return m_displays.OrderBy(x => x.DeviceID).ToList();
                 }
             }
         }
@@ -69,67 +69,8 @@ namespace WinMan.Windows
         public Win32DisplayManager(Win32Workspace workspace)
         {
             m_workspace = workspace;
-            m_displays = new HashSet<Win32Display>(GetMonitors().Select(x => new Win32Display(this, x)));
+            m_displays = new HashSet<Win32Display>(GetVisibleDisplayMonitors().Select(x => new Win32Display(this, GetDeviceID(x.deviceName))));
             PrimaryDisplay = m_displays.First(x => x.Bounds.TopLeft == new Point(0, 0));
-        }
-
-        private List<IntPtr> GetMonitors()
-        {
-            List<IntPtr> monitors = new List<IntPtr>();
-            Exception? exception = null;
-            unsafe
-            {
-                // Handling the error code from EnumDisplayMonitors is problematic, because not all fail modes are
-                // documented. Microsoft's own samples and WPF sources do not handle the errors from this call.
-                EnumDisplayMonitors(new(), (RECT*)null, delegate (HMONITOR hMonitor, HDC hdcMonitor, RECT* lprcMonitor, LPARAM dwData)
-                {
-                    try
-                    {
-                        if (IsVisibleMonitor(hMonitor))
-                        {
-                            monitors.Add(hMonitor);
-                        }
-                        return true;
-                    }
-                    catch (InvalidDisplayReferenceException)
-                    {
-                        return true;
-                    }
-                    catch (Exception e)
-                    {
-                        exception = e;
-                        return false;
-                    }
-                }, new LPARAM());
-
-                if (exception != null)
-                {
-                    throw new AggregateException("An exception was thrown from the EnumDisplayMonitors callback!", exception);
-                }
-
-                if (monitors.Count == 0)
-                {
-                    throw new Win32Exception().WithMessage("Could not enumerate the display monitors attached to the system!");
-                }
-            }
-            return monitors;
-        }
-
-        private List<IntPtr> WaitForMonitors()
-        {
-            for (int i = 0; i < 10; i++)
-            {
-                if (i != 0)
-                {
-                    Thread.Sleep(500);
-                }
-                var monitors = GetMonitors();
-                if (monitors.Count > 0)
-                {
-                    return monitors;
-                }
-            }
-            throw new IndexOutOfRangeException("EnumDisplayMonitors returned no monitors. The operation was retied but failed.");
         }
 
         internal void OnDisplayChange()
@@ -142,22 +83,22 @@ namespace WinMan.Windows
             lock (m_displays)
             {
                 oldPrimaryDisplay = PrimaryDisplay;
-                var newMonitors = WaitForMonitors();
-                var handles = m_displays.Select(x => x.Handle);
+                var newMonitors = WaitForVisibleDisplayMonitors().Select(x => GetDeviceID(x.deviceName)).ToArray();
+                var deviceIds = m_displays.Select(x => x.DeviceID);
 
-                var added = newMonitors.Except(handles).ToList();
-                var removed = handles.Except(newMonitors).ToList();
+                var added = newMonitors.Except(deviceIds).ToList();
+                var removed = deviceIds.Except(newMonitors).ToList();
 
-                foreach (var hMonitor in removed)
+                foreach (var id in removed)
                 {
-                    var disp = m_displays.First(x => x.Handle == hMonitor);
+                    var disp = m_displays.First(x => x.DeviceID == id);
                     removedDisplays.Add(disp);
                 }
-                m_displays.RemoveWhere(x => removed.Contains(x.Handle));
+                m_displays.RemoveWhere(x => removed.Contains(x.DeviceID));
 
-                foreach (var hMonitor in added)
+                foreach (var id in added)
                 {
-                    var disp = new Win32Display(this, hMonitor);
+                    var disp = new Win32Display(this, id);
                     m_displays.Add(disp);
                     addedDisplays.Add(disp);
                 }
@@ -218,25 +159,43 @@ namespace WinMan.Windows
                 d.OnSettingChange();
             }
         }
-
-        private bool IsVisibleMonitor(IntPtr hMonitor)
+        internal struct DisplayInfo
         {
-            return (GetMonitorInfo(hMonitor).dwFlags & DISPLAY_DEVICE_MIRRORING_DRIVER) == 0;
-        }
+            public string DeviceID;
+            public Rectangle WorkArea;
+            public Rectangle Bounds;
+            public double DPIScale;
+            public int RefreshRate;
+        };
 
-        internal (string deviceName, Rectangle workArea, Rectangle bounds, double dpiScale, int refreshRate) GetMonitorSettings(IntPtr hMonitor)
+        internal DisplayInfo GetDisplayInfo(string deviceID)
         {
             try
             {
-                var (mi, device, refreshRate) = GetMonitorInfoAndSettings(hMonitor);
-                var dpiScale = GetDpiScale(hMonitor);
+                var hMonitor = GetMonitorHandle(deviceID);
+                return GetDisplayInfo(hMonitor);
+            }
+            catch (Win32Exception)
+            {
+                throw new InvalidDisplayReferenceException(deviceID);
+            }
+        }
 
-                return (
-                    deviceName: device,
-                    workArea: new Rectangle(mi.rcWork.left, mi.rcWork.top, mi.rcWork.right, mi.rcWork.bottom),
-                    bounds: new Rectangle(mi.rcMonitor.left, mi.rcMonitor.top, mi.rcMonitor.right, mi.rcMonitor.bottom),
-                    dpiScale,
-                    refreshRate);
+        private DisplayInfo GetDisplayInfo(IntPtr hMonitor)
+        {
+            try
+            {
+                var (mi, device, refreshRate) = GetDisplayInfoInternal(hMonitor);
+                var dpiScale = GetDPIScale(hMonitor);
+
+                return new DisplayInfo
+                {
+                    DeviceID = device,
+                    WorkArea = new Rectangle(mi.rcWork.left, mi.rcWork.top, mi.rcWork.right, mi.rcWork.bottom),
+                    Bounds = new Rectangle(mi.rcMonitor.left, mi.rcMonitor.top, mi.rcMonitor.right, mi.rcMonitor.bottom),
+                    DPIScale = dpiScale,
+                    RefreshRate = refreshRate,
+                };
             }
             catch (Win32Exception e) when (e.IsInvalidMonitorHandleException() || !IsMonitorValid(hMonitor))
             {
@@ -244,25 +203,82 @@ namespace WinMan.Windows
             }
         }
 
-        private int GetRefreshRate(IntPtr hMonitor)
+        private (MONITORINFO mi, string deviceId, int refreshRate) GetDisplayInfoInternal(IntPtr hMonitor)
         {
-            var (_, _, refreshRate) = GetMonitorInfoAndSettings(hMonitor);
-            return refreshRate;
+            var (mi, deviceName) = GetMonitorInfoEx(hMonitor);
+            DEVMODEW devMode = default;
+            if (!EnumDisplaySettings(deviceName, ENUM_DISPLAY_SETTINGS_MODE.ENUM_CURRENT_SETTINGS, ref devMode))
+            {
+                if (!IsMonitorValid(hMonitor))
+                {
+                    throw new InvalidDisplayReferenceException(hMonitor);
+                }
+                if (deviceName == VirtualDeviceName)
+                {
+                    return (mi, GetDeviceID(deviceName), GetVirtualMonitorRefreshRate());
+                }
+                else
+                {
+                    throw new Win32Exception($"Could not read the settings for monitor \"{deviceName}\".");
+                }
+            }
+
+            return (mi, GetDeviceID(deviceName), (int)devMode.dmDisplayFrequency);
         }
 
-        private Rectangle GetWorkArea(IntPtr hMonitor)
+        private List<IntPtr> GetAllDisplayMonitors()
         {
-            var rect = GetMonitorInfo(hMonitor).rcWork;
-            return new Rectangle(rect.left, rect.top, rect.right, rect.bottom);
+            List<IntPtr> monitors = [];
+            unsafe
+            {
+                // Handling the error code from EnumDisplayMonitors is problematic, because not all fail modes are
+                // documented. Microsoft's own samples and WPF sources do not handle the errors from this call.
+                EnumDisplayMonitors(new(), (RECT*)null, delegate (HMONITOR hMonitor, HDC hdcMonitor, RECT* lprcMonitor, LPARAM dwData)
+                {
+                    monitors.Add(hMonitor);
+                    return true;
+                }, new LPARAM());
+
+                if (monitors.Count == 0)
+                {
+                    throw new Win32Exception().WithMessage("Could not enumerate the display monitors attached to the system!");
+                }
+            }
+            return monitors;
         }
 
-        private Rectangle GetBounds(IntPtr hMonitor)
+        private List<(IntPtr hMonitor, MONITORINFO info, string deviceName)> GetVisibleDisplayMonitors()
         {
-            var rect = GetMonitorInfo(hMonitor).rcMonitor;
-            return new Rectangle(rect.left, rect.top, rect.right, rect.bottom);
+            return GetAllDisplayMonitors().Select(hMonitor =>
+            {
+                var (info, name) = GetMonitorInfoEx(hMonitor);
+                return (hMonitor, info, name);
+            }).Where(x => IsVisibleMonitor(x.info)).ToList();
         }
 
-        private double GetDpiScale(IntPtr hMonitor)
+        private List<(IntPtr hMonitor, MONITORINFO info, string deviceName)> WaitForVisibleDisplayMonitors()
+        {
+            for (int i = 0; i < 10; i++)
+            {
+                if (i != 0)
+                {
+                    Thread.Sleep(500);
+                }
+                var monitors = GetVisibleDisplayMonitors();
+                if (monitors.Count > 0)
+                {
+                    return monitors;
+                }
+            }
+            throw new IndexOutOfRangeException("EnumDisplayMonitors returned no monitors. The operation was retied but failed.");
+        }
+
+        private bool IsVisibleMonitor(MONITORINFO info)
+        {
+            return (info.dwFlags & DISPLAY_DEVICE_MIRRORING_DRIVER) == 0;
+        }
+
+        private double GetDPIScale(IntPtr hMonitor)
         {
             if (IsPerMonitorDPISupported)
             {
@@ -282,27 +298,7 @@ namespace WinMan.Windows
             }
         }
 
-        private MONITORINFO GetMonitorInfo(IntPtr hMonitor)
-        {
-            MONITORINFO mi = default;
-            mi.cbSize = (uint)Marshal.SizeOf<MONITORINFO>();
-
-            if (!NativeMethods.GetMonitorInfo(new(hMonitor), ref mi))
-            {
-                try
-                {
-                    throw new Win32Exception().WithMessage($"Could not read the monitor information for HMONITOR={hMonitor:X8}!");
-                }
-                catch (Win32Exception e) when (e.IsInvalidMonitorHandleException() || !IsMonitorValid(hMonitor))
-                {
-                    throw new InvalidDisplayReferenceException(hMonitor, e);
-                }
-            }
-
-            return mi;
-        }
-
-        private (MONITORINFO mi, string device) GetMonitorInfoEx(IntPtr hMonitor)
+        private (MONITORINFO info, string deviceName) GetMonitorInfoEx(IntPtr hMonitor)
         {
             unsafe
             {
@@ -326,32 +322,40 @@ namespace WinMan.Windows
             }
         }
 
-        private (MONITORINFO mi, string device, int refreshRate) GetMonitorInfoAndSettings(IntPtr hMonitor)
+
+        private string GetDeviceID(IntPtr hMonitor)
         {
-            var (mi, device) = GetMonitorInfoEx(hMonitor);
-            DEVMODEW devMode = default;
-            if (!EnumDisplaySettings(device, ENUM_DISPLAY_SETTINGS_MODE.ENUM_CURRENT_SETTINGS, ref devMode))
+            var (_, deviceName) = GetMonitorInfoEx(hMonitor);
+            return GetDeviceID(deviceName);
+        }
+
+        private string GetDeviceID(string deviceName)
+        {
+            DISPLAY_DEVICEW ddInterface = default;
+            ddInterface.cb = (uint)Marshal.SizeOf<DISPLAY_DEVICEW>();
+            if (!EnumDisplayDevices(deviceName, 0, ref ddInterface, EDD_GET_DEVICE_INTERFACE_NAME))
             {
-                if (!IsMonitorValid(hMonitor))
-                {
-                    throw new InvalidDisplayReferenceException(hMonitor);
-                }
-                if (device == VirtualDeviceName)
-                {
-                    return (mi, device, GetVirtualMonitorRefreshRate());
-                }
-                else
-                {
-                    throw new Win32Exception($"Could not read the settings for monitor \"{device}\".");
-                }
+                throw new Win32Exception($"Could not read the device ID for monitor \"{deviceName}\".");
             }
 
-            return (mi, device, (int)devMode.dmDisplayFrequency);
+            return MarshalExtensions.MarshalIntoString(ddInterface.DeviceID.AsSpan());
+        }
+
+        private IntPtr GetMonitorHandle(string deviceID)
+        {
+            foreach (var hMonitor in GetAllDisplayMonitors())
+            {
+                if (GetDeviceID(hMonitor) == deviceID)
+                {
+                    return hMonitor;
+                }
+            }
+            throw new InvalidDisplayReferenceException(deviceID);
         }
 
         private bool IsMonitorValid(IntPtr hMonitor)
         {
-            return GetMonitors().Contains(hMonitor);
+            return GetAllDisplayMonitors().Contains(hMonitor);
         }
 
         private int GetVirtualMonitorRefreshRate()

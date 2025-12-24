@@ -61,30 +61,29 @@ namespace WinMan.Windows
 
         public IWorkspace Workspace => m_manager.Workspace;
 
-        internal IntPtr Handle => m_hMonitor;
-        internal string DeviceName => m_deviceName;
+        internal string DeviceID => m_deviceID;
 
         private readonly Win32DisplayManager m_manager;
-        private readonly IntPtr m_hMonitor;
 
         private readonly object m_syncRoot = new object();
-        private string m_deviceName;
+        private string m_deviceID;
         private Rectangle m_workArea;
         private Rectangle m_bounds;
         private double m_scaling;
         private int m_refreshRate;
 
-        internal Win32Display(Win32DisplayManager manager, IntPtr hMonitor)
+        internal Win32Display(Win32DisplayManager manager, string deviceID)
         {
             m_manager = manager;
-            m_hMonitor = hMonitor;
+            m_deviceID = deviceID;
 
-            var (deviceName, workArea, bounds, scaling, refreshRate) = m_manager.GetMonitorSettings(m_hMonitor);
-            m_deviceName = deviceName;
-            m_workArea = workArea;
-            m_bounds = bounds;
-            m_scaling = scaling;
-            m_refreshRate = refreshRate;
+            var info = m_manager.GetDisplayInfo(deviceID);
+            m_workArea = info.WorkArea;
+            m_bounds = info.Bounds;
+            m_scaling = info.DPIScale;
+            m_refreshRate = info.RefreshRate;
+
+            System.Diagnostics.Debug.WriteLine($"Created {this}");
         }
 
         internal void OnSettingChange()
@@ -96,11 +95,11 @@ namespace WinMan.Windows
             try
             {
                 // Device name cannot change
-                var (_, workArea, bounds, scaling, refreshRate) = m_manager.GetMonitorSettings(m_hMonitor);
-                newWorkArea = workArea;
-                newBounds = bounds;
-                newScaling = scaling;
-                newRefreshRate = refreshRate;
+                var info = m_manager.GetDisplayInfo(m_deviceID);
+                newWorkArea = info.WorkArea;
+                newBounds = info.Bounds;
+                newScaling = info.DPIScale;
+                newRefreshRate = info.RefreshRate;
             }
             catch (InvalidDisplayReferenceException)
             {
@@ -170,17 +169,17 @@ namespace WinMan.Windows
         public override bool Equals(object? obj)
         {
             return obj is Win32Display display &&
-                   EqualityComparer<IntPtr>.Default.Equals(Handle, display.Handle);
+                   DeviceID == display.DeviceID;
         }
 
         public override int GetHashCode()
         {
-            return 1786700523 + Handle.GetHashCode();
+            return 1786700523 + DeviceID.GetHashCode();
         }
 
         public override string ToString()
         {
-            return $"Win32Display {{ {m_deviceName} }}";
+            return $"Win32Display {{ {m_deviceID} }}";
         }
     }
 }

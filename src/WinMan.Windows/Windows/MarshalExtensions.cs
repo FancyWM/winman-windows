@@ -1,4 +1,7 @@
 ﻿
+using System;
+using System.Runtime.InteropServices;
+
 using WinMan.Windows.DllImports;
 
 using static WinMan.Windows.DllImports.NativeMethods;
@@ -17,6 +20,16 @@ namespace WinMan.Windows
                 WindowsDeleteString(hStr);
                 return str;
             }
+        }
+
+        public static string MarshalIntoString(this Span<ushort> span)
+        {
+            int length = 0;
+            while (length < span.Length && span[length] != 0)
+            {
+                length++;
+            }
+            return new(MemoryMarshal.Cast<ushort, char>(span.Slice(0, length)));
         }
     }
 }
