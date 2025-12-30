@@ -39,6 +39,16 @@ namespace WinMan.Windows.Windows
             return GetDesktopIndex(hMon, new Desktop(hMon, VirtualDesktopManagerInternal.GetCurrentDesktop().GetId()));
         }
 
+        public Guid GetCurrentDesktopGuid(IntPtr hMon)
+        {
+            return VirtualDesktopManagerInternal.GetCurrentDesktop().GetId();
+        }
+
+        public Guid GetWindowDesktopGuid(IntPtr hWnd)
+        {
+            return VirtualDesktopManager.GetWindowDesktopId(hWnd);
+        }
+
         public int GetDesktopCount(IntPtr hMon)
         {
             return VirtualDesktopManagerInternal.GetCount();

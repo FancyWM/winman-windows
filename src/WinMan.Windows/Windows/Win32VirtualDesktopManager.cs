@@ -1,6 +1,12 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.ComponentModel;
+using System.Diagnostics;
+using System.Reflection;
 using System.Runtime.InteropServices;
+
+using WinMan.Windows.DllImports;
+using WinMan.Windows.Utilities;
 
 namespace WinMan.Windows
 {
@@ -37,21 +43,7 @@ namespace WinMan.Windows
         {
             get
             {
-                lock (m_desktops)
-                {
-                    try
-                    {
-                        // Always try to get the most recent virtual desktop
-                        return m_desktops[m_vds.GetCurrentDesktopIndex(m_hMon)];
-                    }
-                    catch (ArgumentOutOfRangeException)
-                    {
-                        // If the above operation fails, that means that CheckVirtualDesktopsChanged
-                        // hasn't had the chance to run yet, so return the last recorded virtual desktop
-                        // or whatever is valid,  but don't let the exception slip out.
-                        return m_desktops[Math.Min(m_currentDesktop, m_desktops.Count - 1)];
-                    }
-                }
+                return GetCurrentDesktop();
             }
         }
 
@@ -208,6 +200,49 @@ namespace WinMan.Windows
             if (oldCurrentDesktop != newCurrentDesktop)
             {
                 CurrentDesktopChanged?.Invoke(this, new CurrentDesktopChangedEventArgs(newDesktop, oldDesktop));
+            }
+        }
+
+        private Win32VirtualDesktop GetCurrentDesktop()
+        {
+#if DEBUG
+            var expectedGuid = m_vds.GetCurrentDesktopGuid(m_hMon);
+#endif
+
+            var guidFromRegistryTimer = BlockTimer.Create();
+            Guid guid = VirtualDesktopRegistryHelper.GetCurrentDesktopGuid();
+            guidFromRegistryTimer.LogIfExceeded(15, nameof(VirtualDesktopRegistryHelper.GetCurrentDesktopGuid));
+
+            if (guid != default)
+            {
+                var guidTimer = BlockTimer.Create();
+                guid = m_vds.GetCurrentDesktopGuid(m_hMon);
+                guidTimer.LogIfExceeded(15, nameof(m_vds.GetCurrentDesktopGuid));
+            }
+#if DEBUG
+            else
+            {
+                var comGuid = m_vds.GetCurrentDesktopGuid(m_hMon);
+                if (comGuid == expectedGuid)
+                {
+                    Debug.Assert(guid == expectedGuid);
+                }
+            }
+#endif
+
+            lock (m_desktops)
+            {
+                for (int i = 0; i < m_desktops.Count; i++)
+                {
+                    if (m_desktops[i].Guid == guid)
+                    {
+                        return m_desktops[i];
+                    }
+                }
+                // If the above operation fails, that means that CheckVirtualDesktopsChanged
+                // hasn't had the chance to run yet, so return the last recorded virtual desktop
+                // or whatever is valid.
+                return m_desktops[Math.Min(m_currentDesktop, m_desktops.Count - 1)];
             }
         }
     }

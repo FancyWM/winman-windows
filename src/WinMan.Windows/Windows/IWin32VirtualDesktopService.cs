@@ -26,6 +26,10 @@ namespace WinMan.Windows
 
         int GetCurrentDesktopIndex(IntPtr hMon);
 
+        Guid GetCurrentDesktopGuid(IntPtr hMon);
+
+        Guid GetWindowDesktopGuid(IntPtr hWnd);
+
         int GetDesktopCount(IntPtr hMon);
 
         bool IsWindowPinned(IntPtr hWnd);

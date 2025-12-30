@@ -31,6 +31,16 @@ namespace WinMan.Windows
             return ExecuteWithRetry(() => m_vds.GetCurrentDesktopIndex(hMon));
         }
 
+        public Guid GetCurrentDesktopGuid(IntPtr hMon)
+        {
+            return ExecuteWithRetry(() => m_vds.GetCurrentDesktopGuid(hMon));
+        }
+
+        public Guid GetWindowDesktopGuid(IntPtr hWnd)
+        {
+            return ExecuteWithRetry(() => m_vds.GetWindowDesktopGuid(hWnd));
+        }
+
         public Desktop GetDesktopByIndex(IntPtr hMon, int index)
         {
             return ExecuteWithRetry(() => m_vds.GetDesktopByIndex(hMon, index));

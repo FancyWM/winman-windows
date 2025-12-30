@@ -71,6 +71,8 @@ namespace WinMan.Windows
 
         public IWorkspace Workspace => m_workspace;
 
+        internal Guid Guid => m_desktop.Guid;
+
         public bool HasWindow(IWindow window)
         {
             try
