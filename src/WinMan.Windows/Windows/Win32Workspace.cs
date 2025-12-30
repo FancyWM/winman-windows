@@ -13,6 +13,7 @@ using static WinMan.Windows.DllImports.Constants;
 using static WinMan.Windows.DllImports.NativeMethods;
 using Microsoft.Win32;
 using WinMan.Windows.Windows;
+using System.Threading.Tasks;
 
 namespace WinMan.Windows
 {
@@ -44,7 +45,9 @@ namespace WinMan.Windows
         private IntPtr m_msgWnd;
         private Thread? m_eventLoopThread;
         private Thread? m_processingThread;
+        private Thread? m_backgroundProcessingThread;
         private EventLoop m_processingLoop = new EventLoop();
+        private EventLoop m_backgroundProcessingLoop = new EventLoop();
         private Deleter? m_winEventHook;
         private UIntPtr m_hTimer;
         private UIntPtr m_hTimerRecent;
@@ -58,7 +61,6 @@ namespace WinMan.Windows
         private List<(long timestamp, Win32WindowHandle handle)> m_recentWindowList = new List<(long timestamp, Win32WindowHandle handle)>();
         private IntPtr m_hwndFocused = IntPtr.Zero;
         private readonly Atomic<Point> m_cursorLocation = new Atomic<Point>();
-
         private IVirtualDesktopManager? m_virtualDesktops = null;
 
         public bool IsOpen => m_eventLoopThread != null;
@@ -231,7 +233,12 @@ namespace WinMan.Windows
                     Name = "Win32Workspace.ProcessingThread"
                 };
 
-                m_processingLoop.InvokeAsync(() =>
+                m_backgroundProcessingThread = new Thread(m_backgroundProcessingLoop.Run)
+                {
+                    Name = "Win32Workspace.BackgroundProcessingThread"
+                };
+
+                void Open()
                 {
                     foreach (var window in GetWindowListImpl())
                     {
@@ -255,10 +262,13 @@ namespace WinMan.Windows
                             }
                         }
                     }
-                });
+                }
+
+                m_processingLoop.InvokeAsync(Open);
 
                 m_eventLoopThread.Start();
                 m_processingThread.Start();
+                m_backgroundProcessingThread.Start();
                 m_stopwatch.Start();
             }
         }
@@ -343,18 +353,11 @@ namespace WinMan.Windows
 
         public void RefreshConfiguration()
         {
-            m_processingLoop.InvokeAsync(() =>
-            {
-                CheckVirtualDesktops();
-                CheckVisibilityChanges();
-                OnSettingChange();
-                OnDisplayChange();
-
-                foreach (var window in GetVisibleWindowList())
-                {
-                    window.CheckChanges();
-                }
-            });
+            ScheduleAction(ref m_checkVirtualDesktopsQueued, CheckVirtualDesktops);
+            ScheduleAction(ref m_checkVisibilityChangesQueued, CheckVisibilityChanges);
+            ScheduleAction(ref m_checkVisibleWindowsQueued, CheckVisibleWindows);
+            m_processingLoop.InvokeAsync(OnSettingChange);
+            m_processingLoop.InvokeAsync(OnDisplayChange);
         }
 
         public IWindow UnsafeCreateFromHandle(IntPtr windowHandle)
@@ -371,7 +374,9 @@ namespace WinMan.Windows
 
             m_eventLoopThread?.Join(1000);
             m_processingLoop.Shutdown();
+            m_backgroundProcessingLoop.Shutdown();
             m_processingThread?.Join(1000);
+            m_backgroundProcessingThread?.Join(1000);
         }
 
         internal IWindow? UnsafeGetWindow(IntPtr hwnd)
@@ -386,6 +391,23 @@ namespace WinMan.Windows
                 return window.WindowObject;
             }
             return null;
+        }
+
+        internal Task<T> RunInBackgroundAsync<T>(Func<T> action)
+        {
+            TaskCompletionSource<T> tcs = new();
+            m_backgroundProcessingLoop.InvokeAsync(() =>
+            {
+                try
+                {
+                    tcs.SetResult(action());
+                }
+                catch (Exception e)
+                {
+                    tcs.SetException(e);
+                }
+            });
+            return tcs.Task;
         }
 
         private void OnProcessingLoopException(object? sender, UnhandledExceptionEventArgs e)
@@ -474,11 +496,11 @@ namespace WinMan.Windows
                     case WM_TIMER:
                         if (wParam == IdtTimerWatch)
                         {
-                            m_processingLoop.InvokeAsync(OnTimerWatch);
+                            ScheduleAction(ref m_onTimerWatchQueued, OnTimerWatch);
                         }
                         else if (wParam == IdtRecentTimerWatch)
                         {
-                            m_processingLoop.InvokeAsync(OnRecentTimerWatch);
+                            ScheduleAction(ref m_onRecentTimerWatchQueued, OnRecentTimerWatch);
                         }
                         break;
                     case WM_DISPLAYCHANGE:
@@ -513,19 +535,23 @@ namespace WinMan.Windows
             m_displayManager!.OnDisplayChange();
         }
 
+        private int m_onTimerWatchQueued = 0;
         private void OnTimerWatch()
         {
+            m_onTimerWatchQueued = 0;
             // Dirty checking is still needed, as some things do not have corresponding events.
             // For example, virtual desktop addition/removal or windows changing their WINDOWS_STYLE at runtime
             // cannot be observed directly.
             RefreshConfiguration();
         }
 
+        private int m_onRecentTimerWatchQueued = 0;
         /// <summary>
         /// An alternative timer with the highest possible resolution that checks only the newly created windows for changes.
         /// </summary>
         private void OnRecentTimerWatch()
         {
+            m_onRecentTimerWatchQueued = 0;
             var cleanedList = new List<(long timestamp, Win32WindowHandle handle)>();
             var checkList = new List<Win32WindowHandle>();
             var now = m_stopwatch.ElapsedMilliseconds;
@@ -544,9 +570,10 @@ namespace WinMan.Windows
                 m_recentWindowList = cleanedList;
             }
 
+            var foreground = GetForegroundWindow();
             foreach (var w in checkList)
             {
-                CheckVisibilityChanges(w);
+                CheckVisibilityChanges(w, w.Handle == foreground);
             }
         }
 
@@ -554,7 +581,7 @@ namespace WinMan.Windows
         {
             if (idObject == OBJID_CURSOR && eventType == EVENT_OBJECT_LOCATIONCHANGE)
             {
-                m_processingLoop.InvokeAsync(OnCursorLocationChanged);
+                ScheduleAction(ref m_cursorLocationChangedQueued, OnCursorLocationChanged);
                 return;
             }
 
@@ -568,48 +595,54 @@ namespace WinMan.Windows
             switch (eventType)
             {
                 case EVENT_OBJECT_CREATE:
-                    m_processingLoop.InvokeAsync(() => OnWindowCreated(hwnd));
+                    void OnWindowCreated() => this.OnWindowCreated(hwnd);
+                    m_processingLoop.InvokeAsync(OnWindowCreated);
                     return;
                 case EVENT_OBJECT_DESTROY:
-                    m_processingLoop.InvokeAsync(() => OnWindowDestroyed(hwnd));
+                    void OnWindowDestroyed() => this.OnWindowDestroyed(hwnd);
+                    m_processingLoop.InvokeAsync(OnWindowDestroyed);
                     return;
 
                 case EVENT_SYSTEM_DESKTOPSWITCH:
-                    m_processingLoop.InvokeAsync(() =>
+                    void OnDesktopSwitch()
                     {
+                        m_checkVirtualDesktopsQueued = 1;
+                        m_checkVisibilityChangesQueued = 1;
                         CheckVirtualDesktops();
                         CheckVisibilityChanges();
-                    });
+                    }
+                    m_processingLoop.InvokeAsync(OnDesktopSwitch);
                     return;
 
                 case EVENT_OBJECT_NAMECHANGE:
                     if (m_windowSet.TryGetValue(hwnd, out window) && window.WindowObject != null)
                     {
-                        m_processingLoop.InvokeAsync(() => window.WindowObject.OnTitleChange());
+                        m_processingLoop.InvokeAsync(window.WindowObject.OnTitleChange);
                     }
                     return;
 
                 case EVENT_SYSTEM_MOVESIZESTART:
                     if (m_windowSet.TryGetValue(hwnd, out window) && window.WindowObject != null)
                     {
-                        m_processingLoop.InvokeAsync(() => window.WindowObject.OnMoveSizeStart());
+                        m_processingLoop.InvokeAsync(window.WindowObject.OnMoveSizeStart);
                     }
                     return;
                 case EVENT_SYSTEM_MOVESIZEEND:
                     if (m_windowSet.TryGetValue(hwnd, out window) && window.WindowObject != null)
                     {
-                        m_processingLoop.InvokeAsync(() => window.WindowObject.OnMoveSizeEnd());
+                        m_processingLoop.InvokeAsync(window.WindowObject.OnMoveSizeEnd);
                     }
                     return;
 
                 case EVENT_SYSTEM_FOREGROUND:
-                    m_processingLoop.InvokeAsync(() => OnWindowForeground(hwnd));
+                    void OnWindowForeground() => this.OnWindowForeground(hwnd);
+                    m_processingLoop.InvokeAsync(OnWindowForeground);
                     return;
 
                 case EVENT_OBJECT_LOCATIONCHANGE:
                     if (m_windowSet.TryGetValue(hwnd, out window) && window.WindowObject != null)
                     {
-                        m_processingLoop.InvokeAsync(() => window.WindowObject.OnPositionChanged());
+                        m_processingLoop.InvokeAsync(window.WindowObject.OnPositionChanged);
                     }
                     return;
 
@@ -618,16 +651,21 @@ namespace WinMan.Windows
             }
         }
 
+        private int m_checkVirtualDesktopsQueued = 0;
+
         private void CheckVirtualDesktops()
         {
+            m_checkVirtualDesktopsQueued = 0;
             if (VirtualDesktopManagerLazy is IWin32VirtualDesktopManagerInternal vdm)
             {
                 vdm.CheckVirtualDesktopChanges();
             }
         }
 
+        private int m_cursorLocationChangedQueued = 0;
         private void OnCursorLocationChanged()
         {
+            m_cursorLocationChangedQueued = 0;
             try
             {
                 var newLocation = GetCursorLocation();
@@ -640,6 +678,36 @@ namespace WinMan.Windows
             catch (Win32Exception e) when (e.IsAccessDeniedException())
             {
                 // Ignore access denied
+            }
+        }
+
+
+        private int m_checkVisibilityChangesQueued = 0;
+        private void CheckVisibilityChanges()
+        {
+            m_checkVisibilityChangesQueued = 0;
+            var foreground = GetForegroundWindow();
+            foreach (var window in GetWindowListSnapshot())
+            {
+                CheckVisibilityChanges(window, window.Handle == foreground);
+            }
+        }
+
+        private int m_checkVisibleWindowsQueued = 0;
+        private void CheckVisibleWindows()
+        {
+            m_checkVisibleWindowsQueued = 0;
+            foreach (var window in GetVisibleWindowList())
+            {
+                window.CheckChanges();
+            }
+        }
+
+        private void ScheduleAction(ref int flag, Action action)
+        {
+            if (Interlocked.Exchange(ref flag, 1) == 0)
+            {
+                m_processingLoop.InvokeAsync(action);
             }
         }
 
@@ -806,15 +874,7 @@ namespace WinMan.Windows
             return new Point(pt.x, pt.y);
         }
 
-        private void CheckVisibilityChanges()
-        {
-            foreach (var window in GetWindowListSnapshot())
-            {
-                CheckVisibilityChanges(window);
-            }
-        }
-
-        private void CheckVisibilityChanges(Win32WindowHandle window)
+        private void CheckVisibilityChanges(Win32WindowHandle window, bool isForeground)
         {
             bool isVisible = GetVisibility(window);
             bool isInList;
@@ -835,26 +895,34 @@ namespace WinMan.Windows
             {
                 if (isVisible)
                 {
+                    var addTimer = BlockTimer.Create();
                     lock (m_visibleWindows)
                     {
                         m_visibleWindows.Add(window.WindowObject!);
                     }
+                    addTimer.LogIfExceeded(15, "Add to visible windows");
                     try
                     {
                         try
                         {
+                            var addCallback = BlockTimer.Create();
                             window.WindowObject!.OnAdded();
+                            addCallback.LogIfExceeded(15, "WindowObject OnAdded");
                         }
                         finally
                         {
+                            var addEvent = BlockTimer.Create();
                             WindowAdded?.Invoke(this, new WindowChangedEventArgs(window.WindowObject!));
+                            addEvent.LogIfExceeded(15, "Global WindowAdded event");
                         }
                     }
                     finally
                     {
-                        if (GetForegroundWindow() == window.Handle)
+                        if (isForeground)
                         {
+                            var foregroundTimer = BlockTimer.Create();
                             OnWindowForeground(window.Handle);
+                            foregroundTimer.LogIfExceeded(15, "OnWindowForeground");
                         }
                     }
                 }

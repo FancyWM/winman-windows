@@ -3,8 +3,11 @@ using System.ComponentModel;
 using System.Diagnostics;
 using System.Linq;
 using System.Runtime.InteropServices;
+using System.Threading;
+using System.Threading.Tasks;
 
 using WinMan.Windows.DllImports;
+using WinMan.Windows.Utilities;
 
 using static WinMan.Windows.DllImports.NativeMethods;
 
@@ -43,7 +46,7 @@ namespace WinMan.Windows
         }
 
         // Reference read is atomic
-        public string Title => m_title;
+        public string Title => m_title.Result;
 
         public Rectangle Position
         {
@@ -80,23 +83,23 @@ namespace WinMan.Windows
 
         public bool IsFocused => UseDefaults(() => m_isFocused, false);
 
-        public bool CanResize => UseDefaults(() => GetWINDOWS_STYLE(m_hwnd).HasFlag(WINDOWS_STYLE.WS_SIZEBOX) && ProbeAccess(), false);
+        public bool CanResize => UseDefaults(() => GetStyle().HasFlag(WINDOWS_STYLE.WS_SIZEBOX) && CanAccess(), false);
 
-        public bool CanMove => UseDefaults(() => ProbeAccess(), false);
+        public bool CanMove => UseDefaults(() => CanAccess(), false);
 
-        public bool CanReorder => UseDefaults(() => ProbeAccess(), false);
+        public bool CanReorder => UseDefaults(() => CanAccess(), false);
 
-        public bool CanMinimize => UseDefaults(() => GetWINDOWS_STYLE(m_hwnd).HasFlag(WINDOWS_STYLE.WS_MINIMIZEBOX) && ProbeAccess(), false);
+        public bool CanMinimize => UseDefaults(() => GetStyle().HasFlag(WINDOWS_STYLE.WS_MINIMIZEBOX) && CanAccess(), false);
 
-        public bool CanMaximize => UseDefaults(() => GetWINDOWS_STYLE(m_hwnd).HasFlag(WINDOWS_STYLE.WS_MAXIMIZEBOX) && ProbeAccess(), false);
+        public bool CanMaximize => UseDefaults(() => GetStyle().HasFlag(WINDOWS_STYLE.WS_MAXIMIZEBOX) && CanAccess(), false);
 
         public bool CanCreateLiveThumbnail => true;
 
-        public bool CanClose => UseDefaults(() => ProbeAccess(), false);
+        public bool CanClose => UseDefaults(() => CanAccess(), false);
 
-        public Point? MinSize => UseDefaults(() => !CanResize ? Position.Size : GetMinMaxSize().minSize, default);
+        public Point? MinSize => UseDefaults(() => !CanResize ? Position.Size : GetMinMaxSizeCached().minSize, default);
 
-        public Point? MaxSize => UseDefaults(() => !CanResize ? Position.Size : GetMinMaxSize().maxSize, default);
+        public Point? MaxSize => UseDefaults(() => !CanResize ? Position.Size : GetMinMaxSizeCached().maxSize, default);
 
         public bool IsAlive
         {
@@ -135,7 +138,7 @@ namespace WinMan.Windows
         /// <summary>
         /// The title of the window.
         /// </summary>
-        private string m_title;
+        private Task<string> m_title;
         /// <summary>
         /// The current (last known) location of the window.
         /// </summary>
@@ -160,6 +163,22 @@ namespace WinMan.Windows
         /// The last known previous window handle.
         /// </summary>
         private IntPtr m_oldHwndPrev;
+        /// <summary>
+        /// The revision of the window state.
+        /// </summary>
+        private long m_revision = 0;
+        /// <summary>
+        /// The cached style.
+        /// </summary>
+        private Cached<WINDOWS_STYLE> m_cachedStyle;
+        /// <summary>
+        /// The cached accessibility.
+        /// </summary>
+        private Cached<bool> m_cachedCanAccess;
+        /// <summary>
+        /// Cached min max window size.
+        /// </summary>
+        private Cached<(Point? minSize, Point? maxSize)> m_cachedMinMaxSize;
 
         internal Win32Window(Win32Workspace workspace, IntPtr hwnd)
         {
@@ -167,18 +186,7 @@ namespace WinMan.Windows
             m_hwnd = hwnd;
             m_isDead = false;
             m_oldHwndPrev = GetPreviousWindow()?.Handle ?? IntPtr.Zero;
-            try
-            {
-                m_title = GetTitle();
-            }
-            catch (Win32Exception e) when (e.IsTimeoutException())
-            {
-                m_title = GetClassName() + " (Not Responding)";
-            }
-            catch (Win32Exception)
-            {
-                m_title = "";
-            }
+            m_title = m_workspace.RunInBackgroundAsync(GetTitleWithFallback);
         }
 
         public void Close()
@@ -517,13 +525,16 @@ namespace WinMan.Windows
                 return;
             }
 
-            string oldTitle;
+            Task<string> oldTitleTask;
+            var newTitleTask = Task.FromResult(newTitle);
+
             lock (m_syncRoot)
             {
-                oldTitle = m_title;
-                m_title = newTitle;
+                oldTitleTask = m_title;
+                m_title = newTitleTask;
             }
 
+            var oldTitle = oldTitleTask.Result;
             if (oldTitle != newTitle)
             {
                 TitleChanged?.Invoke(this, new WindowTitleChangedEventArgs(this, newTitle, oldTitle));
@@ -582,6 +593,22 @@ namespace WinMan.Windows
             }
         }
 
+        private string GetTitleWithFallback()
+        {
+            try
+            {
+                return GetTitle();
+            }
+            catch (Win32Exception e) when (e.IsTimeoutException())
+            {
+                return GetClassName() + " (Not Responding)";
+            }
+            catch (Win32Exception)
+            {
+                return "";
+            }
+        }
+
         private string GetTitle()
         {
             unsafe
@@ -614,6 +641,23 @@ namespace WinMan.Windows
                     {
                         int err = Marshal.GetLastWin32Error();
                         CheckAlive();
+                        throw new Win32Exception(err).WithMessage("GetClassName failed!");
+                    }
+                    return new string(pBuffer);
+                }
+            }
+        }
+
+        internal static string GetClassName(IntPtr hwnd)
+        {
+            unsafe
+            {
+                char[] buffer = new char[256];
+                fixed (char* pBuffer = buffer)
+                {
+                    if (0 == NativeMethods.GetClassName(new(hwnd), new(pBuffer), buffer.Length))
+                    {
+                        int err = Marshal.GetLastWin32Error();
                         throw new Win32Exception(err).WithMessage("GetClassName failed!");
                     }
                     return new string(pBuffer);
@@ -806,6 +850,8 @@ namespace WinMan.Windows
 
         private void UpdateConfiguration()
         {
+            Interlocked.Increment(ref m_revision);
+
             Rectangle placement;
             WindowState state;
             bool isTopmost;
@@ -947,6 +993,45 @@ namespace WinMan.Windows
             if (!IsAlive)
             {
                 throw new InvalidWindowReferenceException(m_hwnd);
+            }
+        }
+
+        private (Point? minSize, Point? maxSize) GetMinMaxSizeCached()
+        {
+            lock (m_syncRoot)
+            {
+                if (m_cachedMinMaxSize.Revision != m_revision)
+                {
+                    m_cachedMinMaxSize.Revision = m_revision;
+                    m_cachedMinMaxSize.Value = GetMinMaxSize();
+                }
+                return m_cachedMinMaxSize.Value;
+            }
+        }
+
+        private WINDOWS_STYLE GetStyle()
+        {
+            lock (m_syncRoot)
+            {
+                if (m_cachedStyle.Revision != m_revision)
+                {
+                    m_cachedStyle.Revision = m_revision;
+                    m_cachedStyle.Value = GetWINDOWS_STYLE(m_hwnd);
+                }
+                return m_cachedStyle.Value;
+            }
+        }
+
+        private bool CanAccess()
+        {
+            lock (m_syncRoot)
+            {
+                if (m_cachedCanAccess.Revision != m_revision)
+                {
+                    m_cachedCanAccess.Revision = m_revision;
+                    m_cachedCanAccess.Value = ProbeAccess();
+                }
+                return m_cachedCanAccess.Value;
             }
         }
 
