@@ -8,13 +8,13 @@ namespace WinMan.Windows.Utilities
     {
         public event EventHandler<UnhandledExceptionEventArgs>? UnhandledException;
 
-        private BlockingCollection<Action> m_actions = new BlockingCollection<Action>();
+        private BlockingCollection<(Action action, TimeSpan queued)> m_actions = new();
 
         public void InvokeAsync(Action action)
         {
             try
             {
-                m_actions.Add(action);
+                m_actions.Add((action, SteadyClock.Now));
             }
             catch (InvalidOperationException) when (m_actions.IsAddingCompleted)
             {
@@ -24,11 +24,16 @@ namespace WinMan.Windows.Utilities
 
         public void Run()
         {
-            foreach (var action in m_actions.GetConsumingEnumerable())
+            foreach (var (action, queued) in m_actions.GetConsumingEnumerable())
             {
                 try
                 {
+#if DEBUG
+                    BlockTimer.Create(queued).LogIfExceeded(15, $"Schedule of {action.Method.Name}");
+#endif
+                    var t = BlockTimer.Create();
                     action.Invoke();
+                    t.LogIfExceeded(15, action.Method.Name);
                 }
                 catch (Exception e)
                 {
