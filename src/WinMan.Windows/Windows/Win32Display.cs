@@ -82,8 +82,6 @@ namespace WinMan.Windows
             m_bounds = info.Bounds;
             m_scaling = info.DPIScale;
             m_refreshRate = info.RefreshRate;
-
-            System.Diagnostics.Debug.WriteLine($"Created {this}");
         }
 
         internal void OnSettingChange()

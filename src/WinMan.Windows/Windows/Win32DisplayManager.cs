@@ -58,7 +58,9 @@ namespace WinMan.Windows
         // for RDP connections. I could not find any documentation, and it appears
         // that this device always returns a resoltion of 1024x768.
         // I suspect it is also used when the graphics driver crashes.
-        private static readonly string VirtualDeviceName = "WinDisc";
+        private const string VirtualDeviceName = "WinDisc";
+        // Fake DeviceID we use when we cannot find any displays.
+        private const string NoMonitorID = "NoMonitor";
 
         private const int VirtualDeviceDefaultRefreshRate = 30;
 
@@ -83,11 +85,19 @@ namespace WinMan.Windows
             lock (m_displays)
             {
                 oldPrimaryDisplay = PrimaryDisplay;
-                var newMonitors = WaitForVisibleDisplayMonitors().Select(x => GetDeviceID(x.deviceName)).ToArray();
-                var deviceIds = m_displays.Select(x => x.DeviceID);
+                string[] freshDeviceIds = WaitForVisibleDisplayMonitors()
+                    .Select(x => GetDeviceIDOrNull(x.deviceName))
+                    .Where(x => x != null)
+                    .ToArray()!;
+                if (freshDeviceIds.Length == 0)
+                {
+                    freshDeviceIds = [NoMonitorID];
+                }
 
-                var added = newMonitors.Except(deviceIds).ToList();
-                var removed = deviceIds.Except(newMonitors).ToList();
+                IEnumerable<string> existingDeviceIds = m_displays.Select(x => x.DeviceID);
+
+                string[] added = freshDeviceIds.Except(existingDeviceIds).ToArray();
+                string[] removed = existingDeviceIds.Except(freshDeviceIds).ToArray();
 
                 foreach (var id in removed)
                 {
@@ -98,9 +108,16 @@ namespace WinMan.Windows
 
                 foreach (var id in added)
                 {
-                    var disp = new Win32Display(this, id);
-                    m_displays.Add(disp);
-                    addedDisplays.Add(disp);
+                    try
+                    {
+                        var disp = new Win32Display(this, id);
+                        m_displays.Add(disp);
+                        addedDisplays.Add(disp);
+                    }
+                    catch (InvalidDisplayReferenceException)
+                    {
+                        // ignore
+                    }
                 }
 
                 newPrimaryDisplay = m_displays.FirstOrDefault(x => x.Bounds.TopLeft == new Point(0, 0))
@@ -170,6 +187,18 @@ namespace WinMan.Windows
 
         internal DisplayInfo GetDisplayInfo(string deviceID)
         {
+            if (deviceID == NoMonitorID)
+            {
+                return new DisplayInfo
+                {
+                    DeviceID = NoMonitorID,
+                    Bounds = new Rectangle(0, 0, 1024, 768),
+                    WorkArea = new Rectangle(0, 0, 1024, 768),
+                    DPIScale = 1,
+                    RefreshRate = 60,
+                };
+            }
+
             try
             {
                 var hMonitor = GetMonitorHandle(deviceID);
@@ -329,16 +358,25 @@ namespace WinMan.Windows
             return GetDeviceID(deviceName);
         }
 
-        private string GetDeviceID(string deviceName)
+        private string? GetDeviceIDOrNull(string deviceName)
         {
             DISPLAY_DEVICEW ddInterface = default;
             ddInterface.cb = (uint)Marshal.SizeOf<DISPLAY_DEVICEW>();
             if (!EnumDisplayDevices(deviceName, 0, ref ddInterface, EDD_GET_DEVICE_INTERFACE_NAME))
             {
-                throw new Win32Exception($"Could not read the device ID for monitor \"{deviceName}\".");
+                return null;
             }
 
             return MarshalExtensions.MarshalIntoString(ddInterface.DeviceID.AsSpan());
+        }
+
+        private string GetDeviceID(string deviceName)
+        {
+            if (GetDeviceIDOrNull(deviceName) is string deviceId)
+            {
+                return deviceId;
+            }
+            throw new Win32Exception($"Could not read the device ID for monitor \"{deviceName}\".");
         }
 
         private IntPtr GetMonitorHandle(string deviceID)
