@@ -70,22 +70,10 @@ namespace WinMan.Windows
             get
             {
                 CheckOpen();
-
-                IntPtr hwnd = GetForegroundWindow();
-                if (hwnd == IntPtr.Zero)
+                lock (m_windowSet)
                 {
-                    return null;
-                }
-
-                IntPtr desktopHwnd = GetDesktopWindow();
-                while (true)
-                {
-                    IntPtr parentHwnd = GetParent(new(hwnd));
-                    if (parentHwnd == IntPtr.Zero || parentHwnd == desktopHwnd)
-                    {
-                        return FindWindow(hwnd);
-                    }
-                    hwnd = parentHwnd;
+                    m_windowSet.TryGetValue(m_hwndFocused, out var window);
+                    return window?.WindowObject;
                 }
             }
         }
@@ -570,10 +558,9 @@ namespace WinMan.Windows
                 m_recentWindowList = cleanedList;
             }
 
-            var foreground = GetForegroundWindow();
             foreach (var w in checkList)
             {
-                CheckVisibilityChanges(w, w.Handle == foreground);
+                CheckVisibilityChanges(w);
             }
         }
 
@@ -597,10 +584,12 @@ namespace WinMan.Windows
                 case EVENT_OBJECT_CREATE:
                     void OnWindowCreated() => this.OnWindowCreated(hwnd);
                     m_processingLoop.InvokeAsync(OnWindowCreated);
+                    m_processingLoop.InvokeAsync(CheckForegroundWindow);
                     return;
                 case EVENT_OBJECT_DESTROY:
                     void OnWindowDestroyed() => this.OnWindowDestroyed(hwnd);
                     m_processingLoop.InvokeAsync(OnWindowDestroyed);
+                    m_processingLoop.InvokeAsync(CheckForegroundWindow);
                     return;
 
                 case EVENT_SYSTEM_DESKTOPSWITCH:
@@ -635,8 +624,7 @@ namespace WinMan.Windows
                     return;
 
                 case EVENT_SYSTEM_FOREGROUND:
-                    void OnWindowForeground() => this.OnWindowForeground(hwnd);
-                    m_processingLoop.InvokeAsync(OnWindowForeground);
+                    m_processingLoop.InvokeAsync(CheckForegroundWindow);
                     return;
 
                 case EVENT_OBJECT_LOCATIONCHANGE:
@@ -686,10 +674,9 @@ namespace WinMan.Windows
         private void CheckVisibilityChanges()
         {
             m_checkVisibilityChangesQueued = 0;
-            var foreground = GetForegroundWindow();
             foreach (var window in GetWindowListSnapshot())
             {
-                CheckVisibilityChanges(window, window.Handle == foreground);
+                CheckVisibilityChanges(window);
             }
         }
 
@@ -729,21 +716,11 @@ namespace WinMan.Windows
                 }
                 try
                 {
-                    try
-                    {
-                        window.WindowObject!.OnAdded();
-                    }
-                    finally
-                    {
-                        WindowAdded?.Invoke(this, new WindowChangedEventArgs(window.WindowObject!));
-                    }
+                    window.WindowObject!.OnAdded();
                 }
                 finally
                 {
-                    if (GetForegroundWindow() == hwnd)
-                    {
-                        OnWindowForeground(hwnd);
-                    }
+                    WindowAdded?.Invoke(this, new WindowChangedEventArgs(window.WindowObject!));
                 }
             }
             else
@@ -805,6 +782,11 @@ namespace WinMan.Windows
             }
         }
 
+        private void CheckForegroundWindow()
+        {
+            OnWindowForeground(GetAncestor(GetForegroundWindow(), GetAncestor_gaFlags.GA_ROOT));
+        }
+
         private void OnWindowForeground(IntPtr hwnd)
         {
             if (m_hwndFocused == hwnd)
@@ -812,39 +794,32 @@ namespace WinMan.Windows
                 return;
             }
 
+            Win32WindowHandle? backgrounded;
+            Win32WindowHandle? foregrounded;
+            lock (m_windowSet)
+            {
+                m_windowSet.TryGetValue(m_hwndFocused, out backgrounded);
+                m_windowSet.TryGetValue(hwnd, out foregrounded);
+            }
+
+            var backgroundedHwnd = m_hwndFocused;
+            // Only set m_hwndFocused if WindowObject exists.
+            m_hwndFocused = foregrounded?.WindowObject?.Handle ?? default;
+
             try
             {
-                if (m_windowSet.TryGetValue(m_hwndFocused, out var window))
+                try
                 {
-                    window.WindowObject?.OnBackground();
+                    backgrounded?.WindowObject?.OnBackground();
+                }
+                finally
+                {
+                    foregrounded?.WindowObject?.OnForeground();
                 }
             }
             finally
             {
-                if (m_windowSet.TryGetValue(hwnd, out var window) && window.WindowObject != null)
-                {
-                    var oldFocusedHwnd = m_hwndFocused;
-                    m_hwndFocused = hwnd;
-                    window.WindowObject.OnForeground();
-
-                    if (oldFocusedHwnd == IntPtr.Zero)
-                    {
-                        FocusedWindowChanged?.Invoke(this, new FocusedWindowChangedEventArgs(window.WindowObject, null));
-                    }
-                    else if (m_windowSet.TryGetValue(oldFocusedHwnd, out var oldWindow) && oldWindow.WindowObject != null)
-                    {
-                        FocusedWindowChanged?.Invoke(this, new FocusedWindowChangedEventArgs(window.WindowObject, oldWindow.WindowObject));
-                    }
-                }
-                else
-                {
-                    var oldFocusedHwnd = m_hwndFocused;
-                    m_hwndFocused = IntPtr.Zero;
-                    if (m_windowSet.TryGetValue(oldFocusedHwnd, out var oldWindow) && oldWindow.WindowObject != null)
-                    {
-                        FocusedWindowChanged?.Invoke(this, new FocusedWindowChangedEventArgs(null, oldWindow.WindowObject));
-                    }
-                }
+                FocusedWindowChanged?.Invoke(this, new FocusedWindowChangedEventArgs(foregrounded?.WindowObject, backgrounded?.WindowObject));
             }
         }
 
@@ -874,7 +849,7 @@ namespace WinMan.Windows
             return new Point(pt.x, pt.y);
         }
 
-        private void CheckVisibilityChanges(Win32WindowHandle window, bool isForeground)
+        private void CheckVisibilityChanges(Win32WindowHandle window)
         {
             bool isVisible = GetVisibility(window);
             bool isInList;
@@ -903,27 +878,15 @@ namespace WinMan.Windows
                     addTimer.LogIfExceeded(15, "Add to visible windows");
                     try
                     {
-                        try
-                        {
-                            var addCallback = BlockTimer.Create();
-                            window.WindowObject!.OnAdded();
-                            addCallback.LogIfExceeded(15, "WindowObject OnAdded");
-                        }
-                        finally
-                        {
-                            var addEvent = BlockTimer.Create();
-                            WindowAdded?.Invoke(this, new WindowChangedEventArgs(window.WindowObject!));
-                            addEvent.LogIfExceeded(15, "Global WindowAdded event");
-                        }
+                        var addCallback = BlockTimer.Create();
+                        window.WindowObject!.OnAdded();
+                        addCallback.LogIfExceeded(15, "WindowObject OnAdded");
                     }
                     finally
                     {
-                        if (isForeground)
-                        {
-                            var foregroundTimer = BlockTimer.Create();
-                            OnWindowForeground(window.Handle);
-                            foregroundTimer.LogIfExceeded(15, "OnWindowForeground");
-                        }
+                        var addEvent = BlockTimer.Create();
+                        WindowAdded?.Invoke(this, new WindowChangedEventArgs(window.WindowObject!));
+                        addEvent.LogIfExceeded(15, "Global WindowAdded event");
                     }
                 }
                 else
