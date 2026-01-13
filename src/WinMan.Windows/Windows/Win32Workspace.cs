@@ -14,6 +14,9 @@ using static WinMan.Windows.DllImports.NativeMethods;
 using Microsoft.Win32;
 using WinMan.Windows.Windows;
 using System.Threading.Tasks;
+using System.Text.RegularExpressions;
+using System.Runtime.InteropServices;
+using WinMan.Windows.Com;
 
 namespace WinMan.Windows
 {
@@ -136,6 +139,17 @@ namespace WinMan.Windows
                     catch (InvalidCastException)
                     {
                         return new DummyVirtualDesktopManager(this);
+                    }
+                    catch (COMException e)
+                    {
+                        string pattern = @"(?:\{[0-9A-Fa-f]{8}-(?:[0-9A-Fa-f]{4}-){3}[0-9A-Fa-f]{12}\}|[0-9A-Fa-f]{8}-(?:[0-9A-Fa-f]{4}-){3}[0-9A-Fa-f]{12})";
+                        Match match = Regex.Match(e.Message, pattern, RegexOptions.IgnoreCase);
+                        if (match.Success)
+                        {
+                            string report = ComDiagnostics.GetReportJson(match.Value);
+                            throw new COMException($"{e.Message}\nReport: {report}", e.HResult);
+                        }
+                        throw;
                     }
 
                     vds = new FaultTolerantWin32VirtualDesktopService(vds);
