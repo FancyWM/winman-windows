@@ -598,12 +598,12 @@ namespace WinMan.Windows
                 case EVENT_OBJECT_CREATE:
                     void OnWindowCreated() => this.OnWindowCreated(hwnd);
                     m_processingLoop.InvokeAsync(OnWindowCreated);
-                    m_processingLoop.InvokeAsync(CheckForegroundWindow);
+                    ScheduleAction(ref m_checkForegroundWindowQueued, CheckForegroundWindow);
                     return;
                 case EVENT_OBJECT_DESTROY:
                     void OnWindowDestroyed() => this.OnWindowDestroyed(hwnd);
                     m_processingLoop.InvokeAsync(OnWindowDestroyed);
-                    m_processingLoop.InvokeAsync(CheckForegroundWindow);
+                    ScheduleAction(ref m_checkForegroundWindowQueued, CheckForegroundWindow);
                     return;
 
                 case EVENT_SYSTEM_DESKTOPSWITCH:
@@ -638,7 +638,7 @@ namespace WinMan.Windows
                     return;
 
                 case EVENT_SYSTEM_FOREGROUND:
-                    m_processingLoop.InvokeAsync(CheckForegroundWindow);
+                    ScheduleAction(ref m_checkForegroundWindowQueued, CheckForegroundWindow);
                     return;
 
                 case EVENT_OBJECT_LOCATIONCHANGE:
@@ -796,8 +796,11 @@ namespace WinMan.Windows
             }
         }
 
+        private int m_checkForegroundWindowQueued = 0;
+
         private void CheckForegroundWindow()
         {
+            m_checkForegroundWindowQueued = 0;
             OnWindowForeground(GetAncestor(GetForegroundWindow(), GetAncestor_gaFlags.GA_ROOT));
         }
 
