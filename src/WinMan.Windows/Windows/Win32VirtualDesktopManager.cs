@@ -225,7 +225,7 @@ namespace WinMan.Windows
                 var comGuid = m_vds.GetCurrentDesktopGuid(m_hMon);
                 if (comGuid == expectedGuid)
                 {
-                    Debug.Assert(guid == expectedGuid);
+                    Debug.Assert(guid == expectedGuid, $"{guid} == {expectedGuid}");
                 }
             }
 #endif
