@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Diagnostics;
@@ -620,7 +620,7 @@ namespace WinMan.Windows
                 case EVENT_OBJECT_NAMECHANGE:
                     if (m_windowSet.TryGetValue(hwnd, out window) && window.WindowObject != null)
                     {
-                        m_processingLoop.InvokeAsync(window.WindowObject.OnTitleChange);
+                        m_backgroundProcessingLoop.InvokeAsync(window.WindowObject.OnTitleChange);
                     }
                     return;
 
