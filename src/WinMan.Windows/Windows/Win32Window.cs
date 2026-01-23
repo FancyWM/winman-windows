@@ -713,6 +713,30 @@ namespace WinMan.Windows
             }
         }
 
+        internal static bool GetIsLikelyToBeTopLevelVisibleSoon(IWorkspace workspace, IntPtr hwnd)
+        {
+            if (hwnd != GetAncestor(new(hwnd), GetAncestor_gaFlags.GA_ROOTOWNER))
+            {
+                return false;
+            }
+
+            WINDOWS_STYLE style = GetWINDOWS_STYLE(hwnd);
+            if (style.HasFlag(WINDOWS_STYLE.WS_CHILD))
+            {
+                return false;
+            }
+            if (style.HasFlag(WINDOWS_STYLE.WS_POPUP))
+            {
+                return false;
+            }
+            if (style.HasFlag(WINDOWS_STYLE.WS_DISABLED))
+            {
+                return false;
+            }
+
+            return true;
+        }
+
         internal static bool GetIsTopLevelVisible(IWorkspace workspace, IntPtr hwnd)
         {
             try

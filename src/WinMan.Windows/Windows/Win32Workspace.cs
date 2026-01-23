@@ -32,7 +32,7 @@ namespace WinMan.Windows
 
         // Time period over which to aggressively dirty-check for changes.
         // This is to accommodate windows which take longer to initialise properly.
-        private const long RecentWindowDuration = 200;
+        private const long RecentWindowDuration = 500;
 
         /// <summary>
         /// Timer to watch the whole environment for changes that are not detected as events.
@@ -737,7 +737,7 @@ namespace WinMan.Windows
                     WindowAdded?.Invoke(this, new WindowChangedEventArgs(window.WindowObject!));
                 }
             }
-            else
+            else if (Win32Window.GetIsLikelyToBeTopLevelVisibleSoon(this, window.Handle))
             {
                 lock (m_recentWindowList)
                 {
