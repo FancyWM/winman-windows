@@ -71,7 +71,17 @@ namespace WinMan.Windows
         public Win32DisplayManager(Win32Workspace workspace)
         {
             m_workspace = workspace;
-            m_displays = new HashSet<Win32Display>(GetVisibleDisplayMonitors().Select(x => new Win32Display(this, GetDeviceID(x.deviceName))));
+
+            string[] deviceIds = GetVisibleDisplayMonitors()
+                .Select(x => GetDeviceIDOrNull(x.deviceName))
+                .Where(x => x != null)
+                .ToArray()!;
+            if (deviceIds.Length == 0)
+            {
+                deviceIds = [NoMonitorID];
+            }
+
+            m_displays = [.. deviceIds.Select(x => new Win32Display(this, x))];
             PrimaryDisplay = m_displays.First(x => x.Bounds.TopLeft == new Point(0, 0));
         }
 
