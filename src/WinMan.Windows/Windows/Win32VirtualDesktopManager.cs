@@ -24,6 +24,8 @@ namespace WinMan.Windows
 
         private readonly IntPtr m_hMon;
 
+        private readonly Func<Guid> m_getCurrentDesktopGuid;
+
         public IWorkspace Workspace => m_workspace;
 
         public bool CanManageVirtualDesktops => true;
@@ -64,6 +66,25 @@ namespace WinMan.Windows
             }
 
             m_currentDesktop = m_vds.GetCurrentDesktopIndex(m_hMon);
+
+            try
+            {
+                var comGuid = GetCurrentDesktopGuidFromCom();
+                var registryGuid = VirtualDesktopRegistryHelper.GetCurrentDesktopGuid();
+                // This should be true on Windows 11. Windows 10 may have it in the expected registry location.
+                if (comGuid == registryGuid)
+                {
+                    m_getCurrentDesktopGuid = GetCurrentDesktopGuidFromRegistry;
+                }
+                else
+                {
+                    m_getCurrentDesktopGuid = GetCurrentDesktopGuidFromCom;
+                }
+            }
+            catch
+            {
+                m_getCurrentDesktopGuid = GetCurrentDesktopGuidFromCom;
+            }
         }
 
         public IVirtualDesktop CreateDesktop()
@@ -203,7 +224,7 @@ namespace WinMan.Windows
             }
         }
 
-        private Win32VirtualDesktop GetCurrentDesktop()
+        private Guid GetCurrentDesktopGuidFromRegistry()
         {
 #if DEBUG
             var expectedGuid = m_vds.GetCurrentDesktopGuid(m_hMon);
@@ -229,7 +250,18 @@ namespace WinMan.Windows
                 }
             }
 #endif
+            return guid;
+        }
 
+
+        private Guid GetCurrentDesktopGuidFromCom()
+        {
+            return m_vds.GetCurrentDesktopGuid(m_hMon);
+        }
+
+        private Win32VirtualDesktop GetCurrentDesktop()
+        {
+            var guid = m_getCurrentDesktopGuid();
             lock (m_desktops)
             {
                 for (int i = 0; i < m_desktops.Count; i++)
