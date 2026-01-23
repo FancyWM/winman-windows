@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Linq;
@@ -998,15 +998,23 @@ namespace WinMan.Windows
 
         private (Point? minSize, Point? maxSize) GetMinMaxSizeCached()
         {
+            bool outdated;
             lock (m_syncRoot)
             {
-                if (m_cachedMinMaxSize.Revision != m_revision)
+                outdated = m_cachedMinMaxSize.Revision != m_revision;
+                if (!outdated)
                 {
-                    m_cachedMinMaxSize.Revision = m_revision;
-                    m_cachedMinMaxSize.Value = GetMinMaxSize();
+                    return m_cachedMinMaxSize.Value;
                 }
-                return m_cachedMinMaxSize.Value;
             }
+
+            var fresh = GetMinMaxSize();
+            lock (m_syncRoot)
+            {
+                m_cachedMinMaxSize.Revision = m_revision;
+                m_cachedMinMaxSize.Value = fresh;
+            }
+            return fresh;
         }
 
         private WINDOWS_STYLE GetStyle()
