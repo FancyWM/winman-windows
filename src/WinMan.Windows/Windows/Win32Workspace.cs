@@ -868,7 +868,14 @@ namespace WinMan.Windows
 
         private void CheckVisibilityChanges(Win32WindowHandle window)
         {
+            var t = BlockTimer.Create();
             bool isVisible = GetVisibility(window);
+            t.LogIfExceeded(15, $"{window.Handle}: {isVisible}");
+#if DEBUG
+            window.LastCheckedAt = SteadyClock.Now;
+            window.CheckCount++;
+#endif
+
             bool isInList;
 
             if (window.WindowObject != null)

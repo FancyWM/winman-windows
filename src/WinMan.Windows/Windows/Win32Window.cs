@@ -632,6 +632,14 @@ namespace WinMan.Windows
 
         private string GetClassName()
         {
+            var t = BlockTimer.Create();
+            var className = GetClassNameImpl();
+            t.LogIfExceeded(15, className);
+            return className;
+        }
+
+        private string GetClassNameImpl()
+        {
             unsafe
             {
                 char[] buffer = new char[256];
@@ -813,7 +821,9 @@ namespace WinMan.Windows
 
         internal void CheckChanges()
         {
+            var t = BlockTimer.Create();
             UpdateConfiguration();
+            t.LogIfExceeded(15, Handle.ToString());
         }
 
         internal static uint GetDwordDwmWindowAttribute(IntPtr hwnd, DWMWINDOWATTRIBUTE attr)
