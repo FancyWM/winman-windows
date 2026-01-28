@@ -872,8 +872,11 @@ namespace WinMan.Windows
             bool isVisible = GetVisibility(window);
             t.LogIfExceeded(15, $"{window.Handle}: {isVisible}");
 #if DEBUG
-            window.LastCheckedAt = SteadyClock.Now;
-            window.CheckCount++;
+            if (!isVisible && window.WindowObject == null)
+            {
+                window.LastCheckedAt = SteadyClock.Now;
+                window.CheckCount++;
+            }
 #endif
 
             bool isInList;
