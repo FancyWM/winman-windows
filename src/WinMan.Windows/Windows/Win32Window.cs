@@ -794,7 +794,7 @@ namespace WinMan.Windows
                 bool isAppWindow = exStyle.HasFlag(WINDOWS_EX_STYLE.WS_EX_APPWINDOW);
                 if (isAppWindow)
                 {
-                    return CheckCloaked() && GetWindowTextLength(new(hwnd)) != 0;
+                    return CheckCloaked();
                 }
 
                 bool hasEdge = exStyle.HasFlag(WINDOWS_EX_STYLE.WS_EX_WINDOWEDGE);
@@ -802,13 +802,13 @@ namespace WinMan.Windows
 
                 if (hasEdge || isTopmostOnly || exStyle == 0)
                 {
-                    return CheckCloaked() && GetWindowTextLength(new(hwnd)) != 0;
+                    return CheckCloaked();
                 }
 
                 bool isAcceptFiles = exStyle.HasFlag(WINDOWS_EX_STYLE.WS_EX_ACCEPTFILES);
                 if (isAcceptFiles /* && ShowStyle == ShowMaximized */)
                 {
-                    return CheckCloaked() && GetWindowTextLength(new(hwnd)) != 0;
+                    return CheckCloaked();
                 }
 
                 return false;
