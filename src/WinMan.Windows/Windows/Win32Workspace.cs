@@ -147,7 +147,7 @@ namespace WinMan.Windows
                         if (match.Success)
                         {
                             string report = ComDiagnostics.GetReportJson(match.Value);
-                            throw new COMException($"{e.Message}\nReport: {report}", e.HResult);
+                            throw new ComExceptionWithDiagnostics(e.Message, e.HResult) { ReportJson = report };
                         }
                         throw;
                     }
