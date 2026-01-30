@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Linq;
@@ -754,7 +754,7 @@ namespace WinMan.Windows
                     return false;
                 }
 
-                if (hwnd != GetAncestor(new(hwnd), GetAncestor_gaFlags.GA_ROOTOWNER))
+                if (hwnd != GetAncestor(new(hwnd), GetAncestor_gaFlags.GA_ROOT))
                 {
                     return false;
                 }
