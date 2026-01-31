@@ -1,11 +1,9 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.ComponentModel;
 using System.Diagnostics;
-using System.Reflection;
+using System.Linq;
 using System.Runtime.InteropServices;
 
-using WinMan.Windows.DllImports;
 using WinMan.Windows.Utilities;
 
 namespace WinMan.Windows
@@ -16,9 +14,11 @@ namespace WinMan.Windows
 
         private readonly Win32Workspace m_workspace;
 
-        private readonly List<Win32VirtualDesktop> m_desktops;
+        private List<Win32VirtualDesktop> m_desktops;
 
-        private int m_currentDesktop;
+        private Guid m_currentDesktopGuid;
+
+        private Win32VirtualDesktop? m_currentDesktop;
 
         private readonly IWin32VirtualDesktopService m_vds;
 
@@ -65,7 +65,13 @@ namespace WinMan.Windows
                 m_desktops.Add(new Win32VirtualDesktop(workspace, m_vds, d));
             }
 
-            m_currentDesktop = m_vds.GetCurrentDesktopIndex(m_hMon);
+            m_currentDesktopGuid = m_vds.GetCurrentDesktopGuid(m_hMon);
+            m_currentDesktop = m_desktops.FirstOrDefault(x => x.Guid == m_currentDesktopGuid);
+            if (m_currentDesktop == null)
+            {
+                m_currentDesktopGuid = m_desktops[0].Guid;
+                m_currentDesktop = m_desktops[0];
+            }
 
             try
             {
@@ -131,33 +137,40 @@ namespace WinMan.Windows
             }
         }
 
-        void IWin32VirtualDesktopManagerInternal.CheckVirtualDesktopChanges()
+        private void CheckVirtualDesktopListChanges()
         {
-            List<Win32VirtualDesktop> removedDesktops = new List<Win32VirtualDesktop>();
-            List<Win32VirtualDesktop> addedDesktops = new List<Win32VirtualDesktop>();
+            var newDesktops = m_vds.GetVirtualDesktops(m_hMon);
+            List<Guid> freshGuids = [.. newDesktops.Select(x => x.Guid)];
 
-            int newDesktopCount = m_vds.GetDesktopCount(m_hMon);
-            int oldDesktopCount;
+            var addedDesktops = new List<Win32VirtualDesktop>();
+            var removedDesktops = new List<Win32VirtualDesktop>();
+
             lock (m_syncRoot)
             {
-                oldDesktopCount = m_desktops.Count;
-                if (oldDesktopCount > newDesktopCount)
+                if (m_desktops.Select(x => x.Guid).SequenceEqual(freshGuids))
                 {
-                    for (int i = newDesktopCount; i < oldDesktopCount; i++)
-                    {
-                        removedDesktops.Add(m_desktops[i]);
-                    }
-                    m_desktops.RemoveRange(oldDesktopCount - 1, oldDesktopCount - newDesktopCount);
+                    return;
                 }
-                else if (oldDesktopCount < newDesktopCount)
+
+                List<Win32VirtualDesktop> updatedDesktops = [];
+                for (int i = 0; i < freshGuids.Count; i++)
                 {
-                    for (int i = oldDesktopCount; i < newDesktopCount; i++)
+                    var freshGuid = freshGuids[i];
+                    var knownDesktop = m_desktops.FirstOrDefault(x => x.Guid == freshGuid);
+                    if (knownDesktop != null)
                     {
-                        var newInstance = new Win32VirtualDesktop(m_workspace, m_vds, m_vds.GetDesktopByIndex(m_hMon, i));
-                        m_desktops.Add(newInstance);
-                        addedDesktops.Add(newInstance);
+                        updatedDesktops.Add(knownDesktop);
+                    }
+                    else
+                    {
+                        var newDesktop = new Win32VirtualDesktop(m_workspace, m_vds, new IWin32VirtualDesktopService.Desktop(m_hMon, freshGuid));
+                        updatedDesktops.Add(newDesktop);
+                        addedDesktops.Add(newDesktop);
                     }
                 }
+
+                removedDesktops = [.. m_desktops.Where(x => !freshGuids.Contains(x.Guid))];
+                m_desktops = updatedDesktops;
             }
 
             List<Exception> exs = new List<Exception>();
@@ -201,21 +214,51 @@ namespace WinMan.Windows
             {
                 throw new AggregateException(exs);
             }
+        }
 
-            int newCurrentDesktop = m_vds.GetCurrentDesktopIndex(m_hMon);
-            int oldCurrentDesktop;
-            IVirtualDesktop newDesktop;
-            IVirtualDesktop? oldDesktop;
+        void IWin32VirtualDesktopManagerInternal.CheckVirtualDesktopChanges()
+        {
+            var savedCurrentDesktop = CurrentDesktop;
+            CheckVirtualDesktopListChanges();
+
+            Guid newCurrentDesktop = m_vds.GetCurrentDesktopGuid(m_hMon);
+            Guid oldCurrentDesktop;
+            Win32VirtualDesktop? newDesktop = null;
+            Win32VirtualDesktop? oldDesktop = null;
 
             lock (m_syncRoot)
             {
-                oldCurrentDesktop = m_currentDesktop;
-                oldDesktop = oldCurrentDesktop < m_desktops.Count ? m_desktops[oldCurrentDesktop] : null;
+                oldCurrentDesktop = m_currentDesktopGuid;
+                foreach (var d in m_desktops)
+                {
+                    if (d.Guid == oldCurrentDesktop)
+                    {
+                        oldDesktop = d;
+                    }
+                    if (d.Guid == newCurrentDesktop)
+                    {
+                        newDesktop = d;
+                    }
+                }
                 if (newCurrentDesktop != oldCurrentDesktop)
                 {
-                    m_currentDesktop = newCurrentDesktop;
+                    m_currentDesktopGuid = newCurrentDesktop;
                 }
-                newDesktop = m_desktops[newCurrentDesktop];
+                if (newDesktop != null)
+                {
+                    m_currentDesktop = newDesktop;
+                }
+            }
+
+            Debug.Assert(newDesktop != null);
+            if (newDesktop == null)
+            {
+                // The current desktop GUID is not in the list of current desktops.
+                // This can only happen during a race condition, which we cannot avoid.
+                // The same race condition is seen in GetCurrentDesktop.
+                // Best bet is to retry.
+                (this as IWin32VirtualDesktopManagerInternal).CheckVirtualDesktopChanges();
+                return;
             }
 
             if (oldCurrentDesktop != newCurrentDesktop)
@@ -272,9 +315,9 @@ namespace WinMan.Windows
                     }
                 }
                 // If the above operation fails, that means that CheckVirtualDesktopsChanged
-                // hasn't had the chance to run yet, so return the last recorded virtual desktop
-                // or whatever is valid.
-                return m_desktops[Math.Min(m_currentDesktop, m_desktops.Count - 1)];
+                // hasn't had the chance to run yet, so return the previous desktop.
+                Debug.Assert(m_currentDesktop != null);
+                return m_currentDesktop!;
             }
         }
     }
