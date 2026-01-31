@@ -139,40 +139,7 @@ namespace WinMan.Windows
 
         private void CheckVirtualDesktopListChanges()
         {
-            var newDesktops = m_vds.GetVirtualDesktops(m_hMon);
-            List<Guid> freshGuids = [.. newDesktops.Select(x => x.Guid)];
-
-            var addedDesktops = new List<Win32VirtualDesktop>();
-            var removedDesktops = new List<Win32VirtualDesktop>();
-
-            lock (m_syncRoot)
-            {
-                if (m_desktops.Select(x => x.Guid).SequenceEqual(freshGuids))
-                {
-                    return;
-                }
-
-                List<Win32VirtualDesktop> updatedDesktops = [];
-                for (int i = 0; i < freshGuids.Count; i++)
-                {
-                    var freshGuid = freshGuids[i];
-                    var knownDesktop = m_desktops.FirstOrDefault(x => x.Guid == freshGuid);
-                    if (knownDesktop != null)
-                    {
-                        updatedDesktops.Add(knownDesktop);
-                    }
-                    else
-                    {
-                        var newDesktop = new Win32VirtualDesktop(m_workspace, m_vds, new IWin32VirtualDesktopService.Desktop(m_hMon, freshGuid));
-                        updatedDesktops.Add(newDesktop);
-                        addedDesktops.Add(newDesktop);
-                    }
-                }
-
-                removedDesktops = [.. m_desktops.Where(x => !freshGuids.Contains(x.Guid))];
-                m_desktops = updatedDesktops;
-            }
-
+            var (addedDesktops, removedDesktops) = Enumerables.UpdateDerivedObjectListUnderLock(m_syncRoot, m_desktops, x => x.Guid, m_vds.GetVirtualDesktops(m_hMon), x => x.Guid, x => new Win32VirtualDesktop(m_workspace, m_vds, new IWin32VirtualDesktopService.Desktop(m_hMon, x.Guid)));
             List<Exception> exs = new List<Exception>();
 
             foreach (var desktop in removedDesktops)

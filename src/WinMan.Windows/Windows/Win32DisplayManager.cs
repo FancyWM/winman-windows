@@ -8,6 +8,8 @@ using System.Threading;
 using Microsoft.Win32;
 
 using WinMan.Windows.DllImports;
+using WinMan.Windows.Utilities;
+
 using static WinMan.Windows.DllImports.Constants;
 using static WinMan.Windows.DllImports.NativeMethods;
 
@@ -66,7 +68,7 @@ namespace WinMan.Windows
 
         private readonly Win32Workspace m_workspace;
 
-        private readonly HashSet<Win32Display> m_displays;
+        private readonly List<Win32Display> m_displays;
 
         public Win32DisplayManager(Win32Workspace workspace)
         {
@@ -87,49 +89,23 @@ namespace WinMan.Windows
 
         internal void OnDisplayChange()
         {
-            var addedDisplays = new List<Win32Display>();
-            var removedDisplays = new List<Win32Display>();
+            List<string> freshDeviceIds = WaitForVisibleDisplayMonitors()
+                .Select(x => GetDeviceIDOrNull(x.deviceName))
+                .Where(x => x != null)
+                .ToList()!;
+            if (freshDeviceIds.Count == 0)
+            {
+                freshDeviceIds = [NoMonitorID];
+            }
+
+            var (addedDisplays, removedDisplays) = Enumerables.UpdateDerivedObjectListUnderLock(m_displays, m_displays, x => x.DeviceID, freshDeviceIds, x => x, x => new Win32Display(this, x));
 
             IDisplay oldPrimaryDisplay;
             IDisplay newPrimaryDisplay;
+
             lock (m_displays)
             {
                 oldPrimaryDisplay = PrimaryDisplay;
-                string[] freshDeviceIds = WaitForVisibleDisplayMonitors()
-                    .Select(x => GetDeviceIDOrNull(x.deviceName))
-                    .Where(x => x != null)
-                    .ToArray()!;
-                if (freshDeviceIds.Length == 0)
-                {
-                    freshDeviceIds = [NoMonitorID];
-                }
-
-                IEnumerable<string> existingDeviceIds = m_displays.Select(x => x.DeviceID);
-
-                string[] added = freshDeviceIds.Except(existingDeviceIds).ToArray();
-                string[] removed = existingDeviceIds.Except(freshDeviceIds).ToArray();
-
-                foreach (var id in removed)
-                {
-                    var disp = m_displays.First(x => x.DeviceID == id);
-                    removedDisplays.Add(disp);
-                }
-                m_displays.RemoveWhere(x => removed.Contains(x.DeviceID));
-
-                foreach (var id in added)
-                {
-                    try
-                    {
-                        var disp = new Win32Display(this, id);
-                        m_displays.Add(disp);
-                        addedDisplays.Add(disp);
-                    }
-                    catch (InvalidDisplayReferenceException)
-                    {
-                        // ignore
-                    }
-                }
-
                 newPrimaryDisplay = m_displays.FirstOrDefault(x => x.Bounds.TopLeft == new Point(0, 0))
                     ?? m_displays.First();
                 if (!oldPrimaryDisplay.Equals(newPrimaryDisplay))
