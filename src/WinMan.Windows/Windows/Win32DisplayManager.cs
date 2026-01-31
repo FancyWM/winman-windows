@@ -253,11 +253,6 @@ namespace WinMan.Windows
                     monitors.Add(hMonitor);
                     return true;
                 }, new LPARAM());
-
-                if (monitors.Count == 0)
-                {
-                    throw new Win32Exception().WithMessage("Could not enumerate the display monitors attached to the system!");
-                }
             }
             return monitors;
         }
@@ -266,9 +261,16 @@ namespace WinMan.Windows
         {
             return GetAllDisplayMonitors().Select(hMonitor =>
             {
-                var (info, name) = GetMonitorInfoEx(hMonitor);
-                return (hMonitor, info, name);
-            }).Where(x => IsVisibleMonitor(x.info)).ToList();
+                try
+                {
+                    var (info, name) = GetMonitorInfoEx(hMonitor);
+                    return (hMonitor, info, name);
+                }
+                catch
+                {
+                    return default;
+                }
+            }).Where(x => x.hMonitor != IntPtr.Zero && IsVisibleMonitor(x.info)).ToList();
         }
 
         private List<(IntPtr hMonitor, MONITORINFO info, string deviceName)> WaitForVisibleDisplayMonitors()
