@@ -84,7 +84,7 @@ namespace WinMan.Windows
                 deviceIds = [NoMonitorID];
             }
 
-            m_displays = [.. deviceIds.Select(x => Win32Display.TryCreate(this, x)).Where(x => x != null)!];
+            m_displays = [.. deviceIds.Select(x => Win32Display.TryCreate(this, x)!).Where(x => x != null)];
             PrimaryDisplay = m_displays.First(x => x.Bounds.TopLeft == new Point(0, 0));
         }
 
