@@ -77,13 +77,14 @@ namespace WinMan.Windows
             string[] deviceIds = GetVisibleDisplayMonitors()
                 .Select(x => GetDeviceIDOrNull(x.deviceName))
                 .Where(x => x != null)
+                .Distinct()
                 .ToArray()!;
             if (deviceIds.Length == 0)
             {
                 deviceIds = [NoMonitorID];
             }
 
-            m_displays = [.. deviceIds.Select(x => new Win32Display(this, x))];
+            m_displays = [.. deviceIds.Select(x => Win32Display.TryCreate(this, x)).Where(x => x != null)!];
             PrimaryDisplay = m_displays.First(x => x.Bounds.TopLeft == new Point(0, 0));
         }
 
@@ -92,6 +93,7 @@ namespace WinMan.Windows
             List<string> freshDeviceIds = WaitForVisibleDisplayMonitors()
                 .Select(x => GetDeviceIDOrNull(x.deviceName))
                 .Where(x => x != null)
+                .Distinct()
                 .ToList()!;
             if (freshDeviceIds.Count == 0)
             {

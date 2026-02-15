@@ -72,6 +72,18 @@ namespace WinMan.Windows
         private double m_scaling;
         private int m_refreshRate;
 
+        internal static Win32Display? TryCreate(Win32DisplayManager manager, string deviceID)
+        {
+            try
+            {
+                return new(manager, deviceID);
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
         internal Win32Display(Win32DisplayManager manager, string deviceID)
         {
             m_manager = manager;
