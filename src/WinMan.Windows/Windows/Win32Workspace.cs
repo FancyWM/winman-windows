@@ -138,7 +138,14 @@ namespace WinMan.Windows
                     }
                     catch (InvalidCastException)
                     {
-                        return new DummyVirtualDesktopManager(this);
+                        try
+                        {
+                            vds = new Win32VirtualDesktopServiceGeneric();
+                        }
+                        catch
+                        {
+                            return new DummyVirtualDesktopManager(this);
+                        }
                     }
                     catch (COMException e)
                     {

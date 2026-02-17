@@ -129,7 +129,21 @@ namespace WinMan.Windows.Com
 		object QueryService(ref Guid service, ref Guid riid);
 	}
 
-	[ComImport]
+
+    [ComImport]
+    [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    [Guid("6D5140C1-7436-11CE-8034-00AA006009FA")]
+    internal interface IComServiceProvider10PreserveSig
+    {
+        [PreserveSig]
+        int QueryService(
+            ref Guid guidService,
+            ref Guid riid,
+			out IntPtr ppvObject);
+    }
+
+
+    [ComImport]
 	[InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
 	[Guid("92CA9DCD-5622-4BBA-A805-5E9F541BD8C9")]
 	internal interface IComObjectArray
@@ -138,7 +152,7 @@ namespace WinMan.Windows.Com
 		void GetAt(int index, ref Guid iid, [MarshalAs(UnmanagedType.Interface)] out object obj);
 	}
 
-	[ComImport]
+    [ComImport]
 	[InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
 	[Guid("4CE81583-1E4C-4632-A621-07A53543148F")]
 	internal interface IComVirtualDesktopPinnedApps
