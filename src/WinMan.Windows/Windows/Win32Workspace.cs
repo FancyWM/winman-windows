@@ -4,19 +4,21 @@ using System.ComponentModel;
 using System.Diagnostics;
 using System.Linq;
 using System.Runtime.ExceptionServices;
+using System.Runtime.InteropServices;
+using System.Text.RegularExpressions;
 using System.Threading;
+using System.Threading.Tasks;
 
-using WinMan.Windows.Utilities;
+using Microsoft.Win32;
 
+using WinMan.Windows.Com;
 using WinMan.Windows.DllImports;
+using WinMan.Windows.Utilities;
+using WinMan.Windows.Windows;
+
 using static WinMan.Windows.DllImports.Constants;
 using static WinMan.Windows.DllImports.NativeMethods;
-using Microsoft.Win32;
-using WinMan.Windows.Windows;
-using System.Threading.Tasks;
-using System.Text.RegularExpressions;
-using System.Runtime.InteropServices;
-using WinMan.Windows.Com;
+using static WinMan.Windows.IWin32VirtualDesktopService;
 
 namespace WinMan.Windows
 {
@@ -63,6 +65,7 @@ namespace WinMan.Windows
         private Stopwatch m_stopwatch = new Stopwatch();
         private List<(long timestamp, Win32WindowHandle handle)> m_recentWindowList = new List<(long timestamp, Win32WindowHandle handle)>();
         private IntPtr m_hwndFocused = IntPtr.Zero;
+        //private IntPtr m_hwndCapture = IntPtr.Zero;
         private readonly Atomic<Point> m_cursorLocation = new Atomic<Point>();
         private IVirtualDesktopManager? m_virtualDesktops = null;
 
@@ -472,11 +475,26 @@ namespace WinMan.Windows
                 EVENT_OBJECT_CREATE,
                 EVENT_OBJECT_DESTROY,
 
+                EVENT_OBJECT_SHOW,
+                EVENT_OBJECT_HIDE,
+
+                EVENT_OBJECT_CLOAKED,
+                EVENT_OBJECT_UNCLOAKED,
+
+                EVENT_SYSTEM_FOREGROUND,
+                EVENT_OBJECT_FOCUS,
+                EVENT_OBJECT_STATECHANGE,
+
                 EVENT_SYSTEM_MOVESIZESTART,
                 EVENT_SYSTEM_MOVESIZEEND,
 
-                EVENT_SYSTEM_FOREGROUND,
                 EVENT_OBJECT_LOCATIONCHANGE,
+
+                EVENT_SYSTEM_MINIMIZESTART,
+                EVENT_SYSTEM_MINIMIZEEND,
+
+                //EVENT_SYSTEM_CAPTURESTART,
+                //EVENT_SYSTEM_CAPTUREEND,
 
                 EVENT_SYSTEM_DESKTOPSWITCH,
 
@@ -598,20 +616,28 @@ namespace WinMan.Windows
                 return;
             }
 
-            Win32WindowHandle? window;
+            void CheckWindowChanges()
+            {
+                if (m_windowSet.TryGetValue(hwnd, out var window))
+                {
+                    if (window.WindowObject == null)
+                    {
+                        this.CheckVisibilityChanges(window);
+                    }
+                    window.WindowObject?.CheckChanges();
+                }
+            }
 
             switch (eventType)
             {
                 case EVENT_OBJECT_CREATE:
                     void OnWindowCreated() => this.OnWindowCreated(hwnd);
                     m_processingLoop.InvokeAsync(OnWindowCreated);
-                    ScheduleAction(ref m_checkForegroundWindowQueued, CheckForegroundWindow);
-                    return;
+                    break;
                 case EVENT_OBJECT_DESTROY:
                     void OnWindowDestroyed() => this.OnWindowDestroyed(hwnd);
                     m_processingLoop.InvokeAsync(OnWindowDestroyed);
-                    ScheduleAction(ref m_checkForegroundWindowQueued, CheckForegroundWindow);
-                    return;
+                    break;
 
                 case EVENT_SYSTEM_DESKTOPSWITCH:
                     void OnDesktopSwitch()
@@ -622,42 +648,106 @@ namespace WinMan.Windows
                         CheckVisibilityChanges();
                     }
                     m_processingLoop.InvokeAsync(OnDesktopSwitch);
-                    return;
+                    break;
 
                 case EVENT_OBJECT_NAMECHANGE:
-                    if (m_windowSet.TryGetValue(hwnd, out window) && window.WindowObject != null)
+                    void OnTitleChanged()
                     {
-                        m_backgroundProcessingLoop.InvokeAsync(window.WindowObject.OnTitleChange);
+                        if (m_windowSet.TryGetValue(hwnd, out var window) && window.WindowObject != null)
+                        {
+                            m_backgroundProcessingLoop.InvokeAsync(window.WindowObject.OnTitleChange);
+                        }
                     }
-                    return;
+                    m_processingLoop.InvokeAsync(OnTitleChanged);
+                    break;
 
                 case EVENT_SYSTEM_MOVESIZESTART:
-                    if (m_windowSet.TryGetValue(hwnd, out window) && window.WindowObject != null)
+                    // The user started dragging a window by its title bar or border.
+                    void OnMoveSizeStart()
                     {
-                        m_processingLoop.InvokeAsync(window.WindowObject.OnMoveSizeStart);
+                        if (m_windowSet.TryGetValue(hwnd, out var window) && window.WindowObject != null)
+                        {
+                            window.WindowObject.OnMoveSizeStart();
+                        }
                     }
-                    return;
+                    m_processingLoop.InvokeAsync(OnMoveSizeStart);
+                    break;
                 case EVENT_SYSTEM_MOVESIZEEND:
-                    if (m_windowSet.TryGetValue(hwnd, out window) && window.WindowObject != null)
+                    // The user released the window after a move or resize.
+                    void OnMoveSizeEnd()
                     {
-                        m_processingLoop.InvokeAsync(window.WindowObject.OnMoveSizeEnd);
+                        if (m_windowSet.TryGetValue(hwnd, out var window) && window.WindowObject != null)
+                        {
+                            window.WindowObject.OnMoveSizeEnd();
+                        }
                     }
-                    return;
+                    m_processingLoop.InvokeAsync(OnMoveSizeEnd);
+                    break;
 
                 case EVENT_SYSTEM_FOREGROUND:
-                    ScheduleAction(ref m_checkForegroundWindowQueued, CheckForegroundWindow);
-                    return;
+                    break;
+                case EVENT_OBJECT_FOCUS:
+                    break;
 
                 case EVENT_OBJECT_LOCATIONCHANGE:
-                    if (m_windowSet.TryGetValue(hwnd, out window) && window.WindowObject != null)
+                    // A window's position or size changed.
+                    void OnPositionChanged()
                     {
-                        m_processingLoop.InvokeAsync(window.WindowObject.OnPositionChanged);
+                        if (m_windowSet.TryGetValue(hwnd, out var window) && window.WindowObject != null)
+                        {
+                            window.WindowObject.OnPositionChanged();
+                        }
                     }
-                    return;
+                    m_processingLoop.InvokeAsync(OnPositionChanged);
+                    break;
+
+                case EVENT_OBJECT_SHOW:
+                    // Window became visible without being newly created.
+                    m_processingLoop.InvokeAsync(CheckWindowChanges);
+                    break;
+                case EVENT_OBJECT_HIDE:
+                    // Window hid itself without being destroyed.
+                    m_processingLoop.InvokeAsync(CheckWindowChanges);
+                    break;
+
+                case EVENT_OBJECT_CLOAKED:
+                    // Window hidden by DWM (likely virtual desktop switch).
+                    m_processingLoop.InvokeAsync(CheckWindowChanges);
+                    break;
+                case EVENT_OBJECT_UNCLOAKED:
+                    // Window returned to this virtual desktop.
+                    m_processingLoop.InvokeAsync(CheckWindowChanges);
+                    break;
+
+                case EVENT_SYSTEM_MINIMIZESTART:
+                    // Window is being minimised.
+                    m_processingLoop.InvokeAsync(CheckWindowChanges);
+                    break;
+                case EVENT_SYSTEM_MINIMIZEEND:
+                    // Window restored from minimised state.
+                    // Note: EVENT_SYSTEM_FOREGROUND is unreliable after a restore.
+                    m_processingLoop.InvokeAsync(CheckWindowChanges);
+                    break;
+
+                case EVENT_OBJECT_STATECHANGE:
+                    // State flags changed - maximised, fullscreen, enabled/disabled, etc.
+                    m_processingLoop.InvokeAsync(CheckWindowChanges);
+                    break;
+
+                //case EVENT_SYSTEM_CAPTURESTART:
+                //    // A window captured the mouse.
+                //    m_hwndCapture = GetAncestor(new(hwnd), GetAncestor_gaFlags.GA_ROOT);
+                //    break;
+                //case EVENT_SYSTEM_CAPTUREEND:
+                //    // Mouse capture released.
+                //    m_hwndCapture = IntPtr.Zero;
+                //    break;
 
                 default:
-                    return;
+                    break;
             }
+
+            ScheduleAction(ref m_checkForegroundWindowQueued, CheckForegroundWindow);
         }
 
         private int m_checkVirtualDesktopsQueued = 0;
