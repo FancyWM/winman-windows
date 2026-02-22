@@ -1,6 +1,5 @@
 ﻿using System;
-using System.Collections.Concurrent;
-using System.Diagnostics;
+using System.Threading.Channels;
 
 namespace WinMan.Windows.Utilities
 {
@@ -8,43 +7,46 @@ namespace WinMan.Windows.Utilities
     {
         public event EventHandler<UnhandledExceptionEventArgs>? UnhandledException;
 
-        private BlockingCollection<(Action action, TimeSpan queued)> m_actions = new();
+        private readonly Channel<(Action action, TimeSpan queued)> m_channel =
+            Channel.CreateUnbounded<(Action action, TimeSpan queued)>(new UnboundedChannelOptions
+            {
+                SingleReader = true,
+                AllowSynchronousContinuations = false
+            });
 
         public void InvokeAsync(Action action)
         {
-            try
-            {
-                m_actions.Add((action, SteadyClock.Now));
-            }
-            catch (InvalidOperationException) when (m_actions.IsAddingCompleted)
-            {
-                return;
-            }
+            m_channel.Writer.TryWrite((action, SteadyClock.Now));
         }
 
         public void Run()
         {
-            foreach (var (action, queued) in m_actions.GetConsumingEnumerable())
+            var reader = m_channel.Reader;
+            while (reader.WaitToReadAsync().AsTask().GetAwaiter().GetResult())
             {
-                try
+                while (reader.TryRead(out var item))
                 {
+                    var (action, queued) = item;
+                    try
+                    {
 #if DEBUG
-                    BlockTimer.Create(queued).LogIfExceeded(15, $"Schedule of {action.Method.Name}");
+                        BlockTimer.Create(queued).LogIfExceeded(15, $"Schedule of {action.Method.Name}");
 #endif
-                    var t = BlockTimer.Create();
-                    action.Invoke();
-                    t.LogIfExceeded(15, action.Method.Name);
-                }
-                catch (Exception e)
-                {
-                    UnhandledException?.Invoke(this, new UnhandledExceptionEventArgs(e, false));
+                        var t = BlockTimer.Create();
+                        action.Invoke();
+                        t.LogIfExceeded(15, action.Method.Name);
+                    }
+                    catch (Exception e)
+                    {
+                        UnhandledException?.Invoke(this, new UnhandledExceptionEventArgs(e, false));
+                    }
                 }
             }
         }
 
         public void Shutdown()
         {
-            m_actions.CompleteAdding();
+            m_channel.Writer.Complete();
         }
     }
 }
