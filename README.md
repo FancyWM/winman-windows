@@ -1,5 +1,7 @@
 # WinMan (Windows/Win32 implementation) <img src="https://raw.githubusercontent.com/veselink1/winman/master/Resources/Icon.png" alt="Logo" width="96">
 
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/FancyWM/winman-windows)
+
 ### WinMan - a window management library for .NET with the following features:
  - Platform-agnostic design
  - Event-based API
