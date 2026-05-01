@@ -189,13 +189,19 @@ namespace WinMan.Windows
             m_title = m_workspace.RunInBackgroundAsync(GetTitleWithFallback);
         }
 
+        private const uint WM_SYSCOMMAND = 0x0112;
+        private const nuint SC_CLOSE = 0xF060;
+
         public void Close()
         {
             unsafe
             {
                 var flags = SendMessageTimeout_fuFlags.SMTO_NORMAL | SendMessageTimeout_fuFlags.SMTO_ABORTIFHUNG;
                 nuint result = 0;
-                if (new LRESULT() == SendMessageTimeout(new(m_hwnd), Constants.WM_CLOSE, new(), new(), flags, 3000, &result))
+                // Mimic the title-bar X button by posting WM_SYSCOMMAND/SC_CLOSE.
+                // Apps such as ShareX and Excel intercept SC_CLOSE for minimize-to-tray
+                // or per-window close behavior; sending raw WM_CLOSE bypasses that.
+                if (new LRESULT() == SendMessageTimeout(new(m_hwnd), WM_SYSCOMMAND, new(SC_CLOSE), new(), flags, 3000, &result))
                 {
                     int err = Marshal.GetLastWin32Error();
                     err = err == 0 ? (int)Constants.ERROR_TIMEOUT : err;
